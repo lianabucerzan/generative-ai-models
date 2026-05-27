@@ -54,9 +54,10 @@ const generateComponent = async () => {
   }
 };
 
-const fmt = (val) => (val !== null && val !== undefined ? val : "—");
-const fmtCost = (val) => (val !== null && val !== undefined ? `~ $${val}` : "—");
-const fmtMs = (val) => (val !== null && val !== undefined ? `${val.toLocaleString()} ms` : "—");
+const isNullish = (val) => val === null || val === undefined || (typeof val === "number" && isNaN(val));
+const fmt = (val) => (!isNullish(val) ? val : "—");
+const fmtCost = (val) => (!isNullish(val) ? `~ $${val}` : "—");
+const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
 </script>
 
 <template>
