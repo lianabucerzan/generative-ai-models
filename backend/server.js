@@ -32,6 +32,11 @@ app.post("/generate", async (req, res) => {
     }
 
     const agent = agentFactory.getAgent(provider);
+    if (!agent) {
+      return res.status(500).json({
+        error: `Agent for provider '${provider}' is not initialized`,
+      });
+    }
     const { output, metrics } = await agent.generate(prompt, model);
 
     res.json({ output, metrics });
