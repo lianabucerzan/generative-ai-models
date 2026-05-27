@@ -4,7 +4,9 @@ export class BaseAgent {
     this.name = name;
     this.description = description;
     this.systemPrompt =
-      "You generate Vue 3 Single File Components using Tailwind CSS. Return only valid Vue 3 SFC code without markdown formatting or backticks.";
+      "You generate UI components as plain HTML with Tailwind CSS classes. " +
+      "Return only the HTML snippet — no Vue, no scripts, no markdown fences, no backticks. " +
+      "Include realistic hardcoded demo data so the component looks complete visually.";
   }
 
   // Returns { output: string, metrics: { modelId, inputTokens, outputTokens, latencyMs, estimatedCostUsd } }

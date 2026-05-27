@@ -1,0 +1,102 @@
+<h2>How should the component preview be shown?</h2>
+<p class="subtitle">The output area currently shows raw code. Where should the live rendered preview appear?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex;gap:8px;height:200px">
+        <!-- Left panel -->
+        <div style="width:32%;background:#1e293b;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <div style="background:#334155;border-radius:4px;height:18px;width:60%"></div>
+          <div style="background:#334155;border-radius:4px;height:36px"></div>
+          <div style="background:#334155;border-radius:4px;height:52px"></div>
+          <div style="background:#334155;border-radius:4px;height:26px"></div>
+        </div>
+        <!-- Right: code + preview side by side -->
+        <div style="flex:1;display:flex;gap:6px">
+          <div style="flex:1;background:#0f172a;border-radius:8px;padding:10px">
+            <div style="color:#475569;font-size:9px;font-family:monospace;margin-bottom:6px">$ Code</div>
+            <div style="color:#4ade80;font-size:8px;font-family:monospace;line-height:1.5">&lt;template&gt;<br>&nbsp;&nbsp;&lt;div&gt;…&lt;/div&gt;<br>&lt;/template&gt;</div>
+          </div>
+          <div style="flex:1;background:#f8fafc;border-radius:8px;padding:10px;border:1px solid #e2e8f0">
+            <div style="color:#94a3b8;font-size:9px;margin-bottom:6px">Preview</div>
+            <div style="background:white;border-radius:4px;padding:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1)">
+              <div style="font-size:9px;font-weight:600;color:#0f172a;margin-bottom:3px">Pricing Card</div>
+              <div style="font-size:8px;color:#64748b">Pro · $29/mo</div>
+              <div style="background:#2563eb;border-radius:3px;padding:3px 6px;font-size:7px;color:white;margin-top:6px;display:inline-block">Get Started</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Side by side</h3>
+      <p>Code and live preview shown simultaneously. Both always visible. Output column splits into two equal panels.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex;gap:8px;height:200px">
+        <!-- Left panel -->
+        <div style="width:32%;background:#1e293b;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <div style="background:#334155;border-radius:4px;height:18px;width:60%"></div>
+          <div style="background:#334155;border-radius:4px;height:36px"></div>
+          <div style="background:#334155;border-radius:4px;height:52px"></div>
+          <div style="background:#334155;border-radius:4px;height:26px"></div>
+        </div>
+        <!-- Right: tabbed output -->
+        <div style="flex:1;background:#0f172a;border-radius:8px;padding:10px;display:flex;flex-direction:column">
+          <!-- Tab bar -->
+          <div style="display:flex;gap:4px;margin-bottom:8px">
+            <div style="background:#1e293b;border-radius:4px;padding:3px 8px;font-size:8px;font-family:monospace;color:#94a3b8">Code</div>
+            <div style="background:#2563eb;border-radius:4px;padding:3px 8px;font-size:8px;font-family:monospace;color:white">Preview</div>
+          </div>
+          <!-- Preview content -->
+          <div style="flex:1;background:#f8fafc;border-radius:6px;padding:12px;display:flex;align-items:center;justify-content:center">
+            <div style="background:white;border-radius:6px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.1);text-align:center">
+              <div style="font-size:10px;font-weight:600;color:#0f172a;margin-bottom:4px">Pricing Card</div>
+              <div style="font-size:9px;color:#64748b">Pro · $29/mo</div>
+              <div style="background:#2563eb;border-radius:4px;padding:3px 8px;font-size:8px;color:white;margin-top:6px;display:inline-block">Get Started</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Tabs: Code / Preview (Recommended)</h3>
+      <p>Switch between raw code and live preview with a tab. Defaults to Preview after generation. Full panel for each view.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:flex;gap:8px;height:200px">
+        <!-- Left panel -->
+        <div style="width:32%;background:#1e293b;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <div style="background:#334155;border-radius:4px;height:18px;width:60%"></div>
+          <div style="background:#334155;border-radius:4px;height:36px"></div>
+          <div style="background:#334155;border-radius:4px;height:52px"></div>
+          <div style="background:#334155;border-radius:4px;height:26px"></div>
+        </div>
+        <!-- Right: preview only, no code -->
+        <div style="flex:1;background:#f8fafc;border-radius:8px;padding:10px;border:1px solid #e2e8f0;display:flex;flex-direction:column">
+          <div style="color:#94a3b8;font-size:9px;margin-bottom:6px">Live Preview</div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center">
+            <div style="background:white;border-radius:8px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.1);text-align:center;width:80%">
+              <div style="font-size:11px;font-weight:600;color:#0f172a;margin-bottom:4px">Pricing Card</div>
+              <div style="font-size:10px;color:#64748b">Pro · $29/mo</div>
+              <div style="background:#2563eb;border-radius:4px;padding:4px 10px;font-size:9px;color:white;margin-top:8px;display:inline-block">Get Started</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Preview only</h3>
+      <p>Replace the code panel entirely with the live preview. No way to see the generated code unless you add it back.</p>
+    </div>
+  </div>
+
+</div>

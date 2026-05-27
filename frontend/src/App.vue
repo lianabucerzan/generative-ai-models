@@ -3,212 +3,165 @@ import { ref, computed, onMounted } from "vue";
 import axios from "axios";
 
 const prompt = ref("");
-const output = ref("");
-const loading = ref(false);
 const models = ref([]);
-const selectedModel = ref("claude-sonnet-4-6");
-const metrics = ref(null);
+const results = ref({});
 const error = ref("");
 
 onMounted(async () => {
   try {
     const response = await axios.get("http://localhost:3000/agents");
     models.value = response.data.models;
-  } catch (err) {
-    console.error("Failed to fetch models:", err);
+  } catch {
     models.value = [
-      { id: "claude-sonnet-4-6", displayName: "Claude Sonnet 4.6", provider: "claude" },
-      { id: "gemini",            displayName: "Gemini 2.5 Pro",     provider: "gemini" },
+      { id: "claude-opus-4-7",           displayName: "Claude Opus 4.7",   provider: "claude" },
+      { id: "claude-sonnet-4-6",         displayName: "Claude Sonnet 4.6", provider: "claude" },
+      { id: "claude-haiku-4-5-20251001", displayName: "Claude Haiku 4.5",  provider: "claude" },
+      { id: "gemini-2.5-pro",            displayName: "Gemini 2.5 Pro",    provider: "gemini" },
     ];
   }
 });
 
-const activeModelName = computed(() => {
-  return models.value.find((m) => m.id === selectedModel.value)?.displayName ?? selectedModel.value;
-});
+const anyLoading = computed(() => Object.values(results.value).some((r) => r.loading));
 
 const generateComponent = async () => {
   if (!prompt.value.trim()) {
     error.value = "Please enter a prompt";
     return;
   }
-
   error.value = "";
-  loading.value = true;
-  metrics.value = null;
 
-  try {
-    const response = await axios.post("http://localhost:3000/generate", {
-      prompt: prompt.value,
-      model: selectedModel.value,
-    });
+  // Set all models to loading
+  const initial = {};
+  models.value.forEach((m) => {
+    initial[m.id] = { output: null, metrics: null, loading: true, error: null };
+  });
+  results.value = initial;
 
-    output.value = response.data.output;
-    metrics.value = response.data.metrics;
-  } catch (err) {
-    console.error(err);
-    error.value = err.response?.data?.error || "Failed to generate component";
-    output.value = "";
-  } finally {
-    loading.value = false;
-  }
+  // Fire all requests in parallel — each updates its slot as it resolves
+  models.value.forEach(async (model) => {
+    try {
+      const res = await axios.post("http://localhost:3000/generate", {
+        prompt: prompt.value,
+        model: model.id,
+      });
+      results.value[model.id] = {
+        output: res.data.output,
+        metrics: res.data.metrics,
+        loading: false,
+        error: null,
+      };
+    } catch (err) {
+      results.value[model.id] = {
+        output: null,
+        metrics: null,
+        loading: false,
+        error: err.response?.data?.error || "Generation failed",
+      };
+    }
+  });
 };
 
 const isNullish = (val) => val === null || val === undefined || (typeof val === "number" && isNaN(val));
 const fmt = (val) => (!isNullish(val) ? val : "—");
 const fmtCost = (val) => (!isNullish(val) ? `~ $${val}` : "—");
 const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
-
-function buildPreviewDoc(sfc) {
-  const templateContent = sfc.match(/<template[^>]*>([\s\S]*)<\/template>/)?.[1] ?? '<p style="color:red">Could not extract template block.</p>';
-  const styleContent = sfc.match(/<style[^>]*>([\s\S]*?)<\/style>/)?.[1] ?? '';
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://unpkg.com/vue@3/dist/vue.global.js"><\/script>
-  <script src="https://cdn.tailwindcss.com"><\/script>
-  <style>${styleContent}</style>
-</head>
-<body style="margin:0">
-  <template id="tpl">${templateContent}</template>
-  <div id="app"></div>
-  <script>
-    const { createApp } = Vue;
-    createApp({ template: document.getElementById('tpl').innerHTML }).mount('#app');
-  <\/script>
-</body>
-</html>`;
-}
-
-const previewDoc = computed(() => (output.value ? buildPreviewDoc(output.value) : ''));
 </script>
 
 <template>
   <div class="min-h-screen bg-gray-100 p-8">
-    <div class="max-w-6xl mx-auto">
-      <h1 class="text-4xl font-bold mb-8 text-gray-900">LLM UI Arena</h1>
+    <div class="max-w-7xl mx-auto">
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Input Section -->
-        <div class="lg:col-span-1">
-          <div class="bg-white rounded-xl p-6 shadow-lg sticky top-8">
-            <h2 class="text-xl font-bold mb-4 text-gray-900">Generate Component</h2>
+      <!-- Header + prompt bar -->
+      <div class="mb-8">
+        <h1 class="text-4xl font-bold text-gray-900 mb-5">LLM UI Arena</h1>
 
-            <!-- Model Selection -->
-            <div class="mb-6">
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Select Model
-              </label>
-              <select
-                v-model="selectedModel"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option
-                  v-for="model in models"
-                  :key="model.id"
-                  :value="model.id"
-                >
-                  {{ model.displayName }}
-                </option>
-              </select>
-              <p class="text-xs text-gray-500 mt-1">
-                Different models generate unique component styles
-              </p>
-            </div>
-
-            <!-- Prompt Input -->
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Prompt
-              </label>
-              <textarea
-                v-model="prompt"
-                placeholder="e.g., Create a modern pricing card with three tiers..."
-                class="w-full h-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              />
-            </div>
-
-            <!-- Error Message -->
-            <div v-if="error" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              {{ error }}
-            </div>
-
-            <!-- Generate Button -->
-            <button
-              @click="generateComponent"
-              :disabled="loading"
-              class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-3 px-6 rounded-lg transition transform hover:scale-105 disabled:scale-100"
-            >
-              {{ loading ? "Generating..." : "Generate" }}
-            </button>
-
-            <!-- Stats -->
-            <div class="mt-6 pt-6 border-t border-gray-200">
-              <p class="text-xs text-gray-600">
-                <span class="font-semibold">Active Model:</span> {{ activeModelName }}
-              </p>
-              <p class="text-xs text-gray-600 mt-1">
-                <span class="font-semibold">Status:</span> {{ loading ? "Generating..." : "Ready" }}
-              </p>
-            </div>
-          </div>
+        <div class="flex gap-3 items-start">
+          <textarea
+            v-model="prompt"
+            placeholder="Describe a UI component, e.g. 'Create a pricing card with three tiers'"
+            class="flex-1 px-4 py-3 border border-gray-300 rounded-xl bg-white shadow-sm resize-none h-16 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <button
+            @click="generateComponent"
+            :disabled="anyLoading"
+            class="px-8 py-3 h-16 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold rounded-xl transition"
+          >
+            {{ anyLoading ? "Generating…" : "Generate" }}
+          </button>
         </div>
 
-        <!-- Output Section -->
-        <div class="lg:col-span-2 flex flex-col gap-3">
-          <iframe
-            v-if="output"
-            :srcdoc="previewDoc"
-            sandbox="allow-scripts allow-same-origin"
-            class="w-full rounded-xl border-0 min-h-[500px] bg-white shadow-lg"
-          />
-          <div
-            v-else
-            class="bg-black text-green-400 rounded-xl p-6 shadow-lg font-mono text-sm flex items-center justify-center min-h-[500px]"
-          >
-            <span class="text-gray-600">{{ loading ? "Generating component..." : "Preview will appear here" }}</span>
+        <p v-if="error" class="mt-2 text-sm text-red-600">{{ error }}</p>
+      </div>
+
+      <!-- 2×2 model grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div
+          v-for="model in models"
+          :key="model.id"
+          class="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col"
+        >
+          <!-- Card header -->
+          <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+            <span class="font-semibold text-gray-900 text-sm">{{ model.displayName }}</span>
+            <span v-if="results[model.id]?.loading" class="text-xs text-blue-500 animate-pulse">Generating…</span>
+            <span v-else-if="results[model.id]?.output" class="text-xs text-green-500">Ready</span>
+            <span v-else-if="results[model.id]?.error" class="text-xs text-red-400">Error</span>
           </div>
 
-          <!-- Metrics Bar -->
+          <!-- Preview -->
+          <div class="flex-1 min-h-64 p-5">
+            <!-- Loading -->
+            <div v-if="results[model.id]?.loading" class="h-64 flex items-center justify-center text-gray-300">
+              <svg class="animate-spin h-8 w-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+            <!-- Output -->
+            <div v-else-if="results[model.id]?.output" v-html="results[model.id].output" />
+            <!-- Error -->
+            <div v-else-if="results[model.id]?.error" class="h-64 flex items-center justify-center text-sm text-red-400">
+              {{ results[model.id].error }}
+            </div>
+            <!-- Empty -->
+            <div v-else class="h-64 flex items-center justify-center text-gray-300 text-sm">
+              Preview will appear here
+            </div>
+          </div>
+
+          <!-- Metrics bar -->
           <div
-            v-if="metrics"
-            class="bg-black rounded-xl px-5 py-3 shadow-lg font-mono text-xs flex items-center gap-5 flex-wrap"
+            v-if="results[model.id]?.metrics"
+            class="bg-slate-900 px-4 py-2 font-mono text-xs flex items-center gap-4 flex-wrap"
           >
-            <div class="flex items-center gap-2">
-              <span class="text-slate-500 uppercase tracking-widest text-[10px]">Model</span>
-              <span class="text-slate-200">{{ fmt(metrics.modelId) }}</span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-slate-500 uppercase tracking-widest text-[9px]">Tokens</span>
+              <span class="text-cyan-400">↑ {{ fmt(results[model.id].metrics.inputTokens) }}</span>
+              <span class="text-violet-400">↓ {{ fmt(results[model.id].metrics.outputTokens) }}</span>
             </div>
-            <div class="w-px h-4 bg-slate-700"></div>
-            <div class="flex items-center gap-2">
-              <span class="text-slate-500 uppercase tracking-widest text-[10px]">Tokens</span>
-              <span class="text-cyan-400">↑ {{ fmt(metrics.inputTokens) }}</span>
-              <span class="text-violet-400">↓ {{ fmt(metrics.outputTokens) }}</span>
+            <div class="w-px h-3 bg-slate-700"></div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-slate-500 uppercase tracking-widest text-[9px]">Latency</span>
+              <span class="text-orange-400">{{ fmtMs(results[model.id].metrics.latencyMs) }}</span>
             </div>
-            <div class="w-px h-4 bg-slate-700"></div>
-            <div class="flex items-center gap-2">
-              <span class="text-slate-500 uppercase tracking-widest text-[10px]">Latency</span>
-              <span class="text-orange-400">{{ fmtMs(metrics.latencyMs) }}</span>
-            </div>
-            <div class="w-px h-4 bg-slate-700"></div>
-            <div class="flex items-center gap-2">
-              <span class="text-slate-500 uppercase tracking-widest text-[10px]">Cost</span>
-              <span class="text-green-400">{{ fmtCost(metrics.estimatedCostUsd) }}</span>
+            <div class="w-px h-3 bg-slate-700"></div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-slate-500 uppercase tracking-widest text-[9px]">Cost</span>
+              <span class="text-green-400">{{ fmtCost(results[model.id].metrics.estimatedCostUsd) }}</span>
             </div>
           </div>
         </div>
       </div>
+
     </div>
   </div>
 </template>
 
 <style scoped>
-select, textarea, button {
+textarea {
   transition: all 0.2s ease;
 }
-
 textarea:focus {
-  transform: scale(1.02);
+  transform: scale(1.01);
 }
 </style>

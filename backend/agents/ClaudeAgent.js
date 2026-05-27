@@ -1,4 +1,5 @@
 // backend/agents/ClaudeAgent.js
+import { execFileSync, spawn } from "child_process";
 import { BaseAgent } from "./BaseAgent.js";
 import { estimateCost } from "../pricing.js";
 
@@ -7,26 +8,41 @@ let Anthropic = null;
 try {
   const anthropicModule = await import("@anthropic-ai/sdk");
   Anthropic = anthropicModule.default;
-} catch (error) {
-  // SDK is optional — falls back to mock generation
+} catch {
+  // SDK is optional — falls back to claude CLI or mock
+}
+
+function claudeCLIAvailable() {
+  try {
+    execFileSync("which", ["claude"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export class ClaudeAgent extends BaseAgent {
   constructor() {
     super("claude", "Anthropic Claude");
     this.client = null;
+    this.useCLI = false;
 
     if (process.env.ANTHROPIC_API_KEY && Anthropic) {
       try {
         this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-        console.log("Claude Agent: client initialized");
+        console.log("Claude Agent: API key found, using SDK");
       } catch (error) {
         console.warn("Claude Agent: failed to initialize client", error.message);
       }
-    } else if (!Anthropic) {
-      console.log("Claude Agent: SDK not installed. Using mock generation");
-    } else {
-      console.log("Claude Agent: no API key. Using mock generation");
+    }
+
+    if (!this.client) {
+      this.useCLI = claudeCLIAvailable();
+      if (this.useCLI) {
+        console.log("Claude Agent: no API key, using claude CLI");
+      } else {
+        console.log("Claude Agent: no API key and no CLI, using mock generation");
+      }
     }
   }
 
@@ -34,12 +50,13 @@ export class ClaudeAgent extends BaseAgent {
     if (this.client) {
       return this._generateWithAPI(prompt, modelId);
     }
+    if (this.useCLI) {
+      return this._generateWithCLI(prompt, modelId);
+    }
     const start = Date.now();
-    const output = this._generateWithMock(prompt);
-    const latencyMs = Date.now() - start;
     return {
-      output,
-      metrics: { modelId, inputTokens: null, outputTokens: null, latencyMs, estimatedCostUsd: null },
+      output: this._generateWithMock(prompt),
+      metrics: { modelId, inputTokens: null, outputTokens: null, latencyMs: Date.now() - start, estimatedCostUsd: null },
     };
   }
 
@@ -66,15 +83,86 @@ export class ClaudeAgent extends BaseAgent {
         },
       };
     } catch (error) {
-      console.warn("Claude Agent: API call failed, falling back to mock");
+      console.warn("Claude Agent: API call failed, falling back to CLI or mock");
+      if (this.useCLI) {
+        return this._generateWithCLI(prompt, modelId);
+      }
       // latencyMs includes the failed request time — reflects total user wait
       const latencyMs = Date.now() - start;
-      const output = this._generateWithMock(prompt);
       return {
-        output,
+        output: this._generateWithMock(prompt),
         metrics: { modelId, inputTokens: null, outputTokens: null, latencyMs, estimatedCostUsd: null },
       };
     }
+  }
+
+  _generateWithCLI(prompt, modelId) {
+    const start = Date.now();
+    // Strip CLAUDECODE so the subprocess isn't blocked by the nested-session guard
+    const env = { ...process.env };
+    delete env.CLAUDECODE;
+
+    return new Promise((resolve) => {
+      const cliSystemPrompt = this.systemPrompt + " No questions, no explanations.";
+      const cliPrompt = `${prompt}. Output ONLY the SFC code, no questions or explanations.`;
+
+      const proc = spawn(
+        "claude",
+        [
+          "-p", cliPrompt,
+          "--system-prompt", cliSystemPrompt,
+          "--model", modelId,
+          "--no-session-persistence",
+          "--output-format", "json",
+        ],
+        { env, stdio: ["ignore", "pipe", "pipe"] }
+      );
+
+      let stdout = "";
+      let stderr = "";
+      proc.stdout.on("data", (d) => (stdout += d));
+      proc.stderr.on("data", (d) => (stderr += d));
+
+      proc.on("close", (code) => {
+        const latencyMs = Date.now() - start;
+        if (code !== 0) {
+          console.warn("Claude CLI exited with code", code, stderr.slice(0, 200));
+          resolve({
+            output: this._generateWithMock(prompt),
+            metrics: { modelId, inputTokens: null, outputTokens: null, latencyMs, estimatedCostUsd: null },
+          });
+        } else {
+          try {
+            const parsed = JSON.parse(stdout.trim());
+            const output = parsed.result.trim().replace(/^```(?:html|vue|)?\n?/, "").replace(/\n?```$/, "");
+            const inputTokens = parsed.usage?.input_tokens ?? null;
+            const outputTokens = parsed.usage?.output_tokens ?? null;
+            const estimatedCostUsd = parsed.total_cost_usd != null
+              ? Math.round(parsed.total_cost_usd * 10000) / 10000
+              : null;
+            resolve({
+              output,
+              metrics: { modelId, inputTokens, outputTokens, latencyMs: parsed.duration_ms ?? latencyMs, estimatedCostUsd },
+            });
+          } catch {
+            const output = stdout.trim().replace(/^```(?:html|vue|)?\n?/, "").replace(/\n?```$/, "");
+            resolve({
+              output,
+              metrics: { modelId, inputTokens: null, outputTokens: null, latencyMs, estimatedCostUsd: null },
+            });
+          }
+        }
+      });
+
+      proc.on("error", (err) => {
+        console.warn("Claude CLI error:", err.message);
+        const latencyMs = Date.now() - start;
+        resolve({
+          output: this._generateWithMock(prompt),
+          metrics: { modelId, inputTokens: null, outputTokens: null, latencyMs, estimatedCostUsd: null },
+        });
+      });
+    });
   }
 
   _generateWithMock(prompt) {

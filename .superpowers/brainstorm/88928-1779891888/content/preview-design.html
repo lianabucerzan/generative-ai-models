@@ -1,0 +1,83 @@
+<h2>Final UI Design — Live Preview</h2>
+<p class="subtitle">The code terminal is replaced by a sandboxed iframe rendering the Vue component. Does this look right?</p>
+
+<div class="mockup">
+  <div class="mockup-header">LLM UI Arena — after generation</div>
+  <div class="mockup-body" style="background:#f1f5f9;padding:20px;border-radius:0 0 8px 8px">
+    <div style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:16px">LLM UI Arena</div>
+    <div style="display:flex;gap:12px">
+
+      <!-- Left panel (unchanged) -->
+      <div style="width:260px;background:white;border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);flex-shrink:0">
+        <div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:12px">Generate Component</div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;color:#64748b;font-weight:500;margin-bottom:4px">Select Model</div>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;font-size:11px;color:#0f172a">Claude Sonnet 4.6 ▾</div>
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;color:#64748b;font-weight:500;margin-bottom:4px">Prompt</div>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;font-size:10px;color:#64748b;height:52px">Create a pricing card...</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:6px;padding:9px;text-align:center;font-size:11px;font-weight:600;color:white">Generate</div>
+        <div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9">
+          <div style="font-size:9px;color:#64748b"><span style="font-weight:600">Active Model:</span> Claude Sonnet 4.6</div>
+          <div style="font-size:9px;color:#64748b;margin-top:2px"><span style="font-weight:600">Status:</span> Ready</div>
+        </div>
+      </div>
+
+      <!-- Right: preview iframe + metrics -->
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+
+        <!-- Live preview iframe simulation -->
+        <div style="flex:1;background:white;border-radius:10px;min-height:200px;box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow:hidden;border:1px solid #e2e8f0">
+          <!-- Simulated rendered component -->
+          <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:32px;display:flex;justify-content:center;align-items:center;min-height:200px">
+            <div style="background:white;border-radius:12px;padding:24px;width:220px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.15)">
+              <div style="font-size:11px;color:#6366f1;font-weight:600;letter-spacing:0.05em;margin-bottom:4px;text-transform:uppercase">Pro Plan</div>
+              <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:2px">$29<span style="font-size:13px;color:#64748b;font-weight:400">/mo</span></div>
+              <div style="font-size:10px;color:#64748b;margin-bottom:12px">Perfect for growing teams</div>
+              <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px;text-align:left">
+                <div style="font-size:9px;color:#374151">✓ Unlimited projects</div>
+                <div style="font-size:9px;color:#374151">✓ Priority support</div>
+                <div style="font-size:9px;color:#374151">✓ Advanced analytics</div>
+              </div>
+              <div style="background:#6366f1;color:white;border-radius:6px;padding:6px;font-size:9px;font-weight:600">Get Started</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metrics bar (unchanged) -->
+        <div style="background:#0f172a;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="color:#64748b;font-size:9px;font-family:monospace">MODEL</span>
+            <span style="color:#e2e8f0;font-size:10px;font-family:monospace">claude-sonnet-4-6</span>
+          </div>
+          <div style="width:1px;height:16px;background:#1e293b"></div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="color:#64748b;font-size:9px;font-family:monospace">TOKENS</span>
+            <span style="color:#22d3ee;font-size:10px;font-family:monospace">↑ 124</span>
+            <span style="color:#a78bfa;font-size:10px;font-family:monospace">↓ 890</span>
+          </div>
+          <div style="width:1px;height:16px;background:#1e293b"></div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="color:#64748b;font-size:9px;font-family:monospace">LATENCY</span>
+            <span style="color:#fb923c;font-size:10px;font-family:monospace">1,243 ms</span>
+          </div>
+          <div style="width:1px;height:16px;background:#1e293b"></div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="color:#64748b;font-size:9px;font-family:monospace">COST</span>
+            <span style="color:#4ade80;font-size:10px;font-family:monospace">~ $0.0031</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Before generation note -->
+    <div style="margin-top:12px;padding:10px 14px;background:#1e293b;border-radius:8px;font-size:10px;color:#64748b;font-family:monospace">
+      Before generation → iframe shows a dark placeholder: "Preview will appear here"
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px">Does this look right? Let me know in the terminal.</p>
