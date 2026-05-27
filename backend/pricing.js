@@ -3,7 +3,7 @@ const MODEL_PRICING = {
   "claude-opus-4-7":            { input: 15  / 1_000_000, output: 75 / 1_000_000 },
   "claude-sonnet-4-6":          { input: 3   / 1_000_000, output: 15 / 1_000_000 },
   "claude-haiku-4-5-20251001":  { input: 0.8 / 1_000_000, output: 4  / 1_000_000 },
-  "gemini":                     { input: 0,                output: 0              }, // placeholder — Gemini tokens not yet instrumented
+  // Gemini pricing not yet instrumented — estimateCost returns null for unknown models
 };
 
 export function estimateCost(modelId, inputTokens, outputTokens) {
