@@ -67,6 +67,7 @@ export class ClaudeAgent extends BaseAgent {
       };
     } catch (error) {
       console.warn("Claude Agent: API call failed, falling back to mock");
+      // latencyMs includes the failed request time — reflects total user wait
       const latencyMs = Date.now() - start;
       const output = this._generateWithMock(prompt);
       return {
