@@ -60,7 +60,7 @@ const fmtCost = (val) => (!isNullish(val) ? `~ $${val}` : "—");
 const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
 
 function buildPreviewDoc(sfc) {
-  const templateContent = sfc.match(/<template>([\s\S]*?)<\/template>/)?.[1] ?? sfc;
+  const templateContent = sfc.match(/<template[^>]*>([\s\S]*)<\/template>/)?.[1] ?? '<p style="color:red">Could not extract template block.</p>';
   const styleContent = sfc.match(/<style[^>]*>([\s\S]*?)<\/style>/)?.[1] ?? '';
   return `<!DOCTYPE html>
 <html>
@@ -161,7 +161,7 @@ const previewDoc = computed(() => (output.value ? buildPreviewDoc(output.value) 
           <iframe
             v-if="output"
             :srcdoc="previewDoc"
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-same-origin"
             class="w-full rounded-xl border-0 min-h-[500px] bg-white shadow-lg"
           />
           <div
