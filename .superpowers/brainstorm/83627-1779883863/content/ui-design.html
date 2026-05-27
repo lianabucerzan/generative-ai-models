@@ -1,0 +1,91 @@
+<h2>UI Design — LLM UI Arena</h2>
+<p class="subtitle">Proposed layout with model dropdown + metrics bar below output. Does this look right?</p>
+
+<div class="mockup">
+  <div class="mockup-header">Full Page Layout</div>
+  <div class="mockup-body" style="background:#f1f5f9;padding:20px;border-radius:0 0 8px 8px">
+    <div style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:16px">LLM UI Arena</div>
+    <div style="display:flex;gap:12px">
+
+      <!-- Left panel -->
+      <div style="width:280px;background:white;border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);flex-shrink:0">
+        <div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:12px">Generate Component</div>
+
+        <!-- Model dropdown -->
+        <div style="margin-bottom:12px">
+          <div style="font-size:10px;color:#64748b;font-weight:500;margin-bottom:4px">Select Model</div>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;font-size:11px;color:#0f172a;display:flex;justify-content:space-between">
+            Claude Sonnet 4.6 <span style="color:#94a3b8">▾</span>
+          </div>
+          <div style="font-size:9px;color:#94a3b8;margin-top:3px">Claude Opus 4.7 · Claude Sonnet 4.6 · Claude Haiku 4.5 · Gemini 2.5 Pro</div>
+        </div>
+
+        <!-- Prompt textarea -->
+        <div style="margin-bottom:12px">
+          <div style="font-size:10px;color:#64748b;font-weight:500;margin-bottom:4px">Prompt</div>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;font-size:10px;color:#94a3b8;height:60px">
+            e.g., Create a modern pricing card...
+          </div>
+        </div>
+
+        <!-- Generate button -->
+        <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:6px;padding:9px;text-align:center;font-size:11px;font-weight:600;color:white">
+          Generate
+        </div>
+
+        <!-- Status -->
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9">
+          <div style="font-size:9px;color:#64748b"><span style="font-weight:600">Active Model:</span> Claude Sonnet 4.6</div>
+          <div style="font-size:9px;color:#64748b;margin-top:2px"><span style="font-weight:600">Status:</span> Ready</div>
+        </div>
+      </div>
+
+      <!-- Right: output + metrics -->
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+
+        <!-- Terminal output -->
+        <div style="background:#0f172a;border-radius:10px;padding:14px;flex:1;min-height:180px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <span style="color:#475569;font-size:10px;font-family:monospace">$ Generated Component</span>
+            <span style="color:#22c55e;font-size:9px">Ready</span>
+          </div>
+          <div style="color:#4ade80;font-size:10px;font-family:monospace;line-height:1.6">
+            &lt;template&gt;<br>
+            &nbsp;&nbsp;&lt;div class="pricing-card"&gt;<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&lt;h2&gt;Pro Plan&lt;/h2&gt;<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&lt;p class="price"&gt;$29/mo&lt;/p&gt;<br>
+            &nbsp;&nbsp;&lt;/div&gt;<br>
+            &lt;/template&gt;
+          </div>
+        </div>
+
+        <!-- Metrics bar -->
+        <div style="background:#0f172a;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="color:#64748b;font-size:9px;font-family:monospace">MODEL</span>
+            <span style="color:#e2e8f0;font-size:10px;font-family:monospace">claude-sonnet-4-6</span>
+          </div>
+          <div style="width:1px;height:16px;background:#1e293b"></div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="color:#64748b;font-size:9px;font-family:monospace">TOKENS</span>
+            <span style="color:#22d3ee;font-size:10px;font-family:monospace">↑ 124</span>
+            <span style="color:#a78bfa;font-size:10px;font-family:monospace">↓ 890</span>
+          </div>
+          <div style="width:1px;height:16px;background:#1e293b"></div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="color:#64748b;font-size:9px;font-family:monospace">LATENCY</span>
+            <span style="color:#fb923c;font-size:10px;font-family:monospace">1,243 ms</span>
+          </div>
+          <div style="width:1px;height:16px;background:#1e293b"></div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="color:#64748b;font-size:9px;font-family:monospace">COST</span>
+            <span style="color:#4ade80;font-size:10px;font-family:monospace">~ $0.0031</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:20px">Does this layout look right? Reply in the terminal to confirm or suggest changes.</p>

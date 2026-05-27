@@ -1,0 +1,44 @@
+<h2>How should models be listed in the dropdown?</h2>
+<p class="subtitle">The dropdown will include all current Anthropic models + Gemini. How should they be organized?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1e293b;border-radius:8px;padding:16px">
+        <div style="color:#94a3b8;font-size:10px;margin-bottom:6px;font-family:sans-serif">Select Model</div>
+        <div style="background:#0f172a;border-radius:6px;border:1px solid #334155;overflow:hidden;font-family:monospace;font-size:11px">
+          <div style="padding:6px 10px;color:#64748b;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:#0f172a;border-bottom:1px solid #1e293b">Anthropic</div>
+          <div style="padding:6px 10px;color:#e2e8f0;background:#1e3a5f">claude-opus-4-7</div>
+          <div style="padding:6px 10px;color:#94a3b8">claude-sonnet-4-6</div>
+          <div style="padding:6px 10px;color:#94a3b8">claude-haiku-4-5</div>
+          <div style="padding:6px 10px;color:#64748b;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:#0f172a;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b">Google</div>
+          <div style="padding:6px 10px;color:#94a3b8">gemini-2.5-pro</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Grouped by provider</h3>
+      <p>Models organized under "Anthropic" and "Google" headers using <code>&lt;optgroup&gt;</code>. Clear provider separation.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1e293b;border-radius:8px;padding:16px">
+        <div style="color:#94a3b8;font-size:10px;margin-bottom:6px;font-family:sans-serif">Select Model</div>
+        <div style="background:#0f172a;border-radius:6px;border:1px solid #334155;overflow:hidden;font-family:monospace;font-size:11px">
+          <div style="padding:6px 10px;color:#e2e8f0;background:#1e3a5f">Claude Opus 4.7</div>
+          <div style="padding:6px 10px;color:#94a3b8">Claude Sonnet 4.6</div>
+          <div style="padding:6px 10px;color:#94a3b8">Claude Haiku 4.5</div>
+          <div style="padding:6px 10px;color:#94a3b8">Gemini 2.5 Pro</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Flat list, friendly names</h3>
+      <p>All models in one flat list with human-readable display names. Simpler, no grouping overhead.</p>
+    </div>
+  </div>
+
+</div>
