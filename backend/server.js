@@ -1,50 +1,47 @@
+// backend/server.js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import OpenAI from "openai";
+import { AgentFactory } from "./agents/AgentFactory.js";
 
 dotenv.config();
 
 const app = express();
+const agentFactory = new AgentFactory();
 
 app.use(cors());
 app.use(express.json());
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+app.get("/agents", (req, res) => {
+  res.json({ models: agentFactory.getModels() });
 });
 
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, model } = req.body;
 
-    const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You generate Vue 3 Single File Components using Tailwind CSS. Return only code.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    });
+    if (!prompt || !model) {
+      return res.status(400).json({ error: "prompt and model are required" });
+    }
 
-    res.json({
-      output: response.choices[0].message.content,
-    });
+    const provider = agentFactory.getProviderForModel(model);
+    if (!provider) {
+      return res.status(400).json({
+        error: `Unknown model '${model}'. Available: ${agentFactory.getModels().map((m) => m.id).join(", ")}`,
+      });
+    }
+
+    const agent = agentFactory.getAgent(provider);
+    const { output, metrics } = await agent.generate(prompt, model);
+
+    res.json({ output, metrics });
   } catch (error) {
     console.error(error);
-
-    res.status(500).json({
-      error: "Generation failed",
-    });
+    res.status(500).json({ error: "Generation failed", details: error.message });
   }
 });
 
 app.listen(3000, () => {
   console.log("Server running on port 3000");
+  console.log("Models:", agentFactory.getModels().map((m) => m.displayName).join(", "));
 });
