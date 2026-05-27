@@ -58,6 +58,31 @@ const isNullish = (val) => val === null || val === undefined || (typeof val === 
 const fmt = (val) => (!isNullish(val) ? val : "—");
 const fmtCost = (val) => (!isNullish(val) ? `~ $${val}` : "—");
 const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
+
+function buildPreviewDoc(sfc) {
+  const templateContent = sfc.match(/<template>([\s\S]*?)<\/template>/)?.[1] ?? sfc;
+  const styleContent = sfc.match(/<style[^>]*>([\s\S]*?)<\/style>/)?.[1] ?? '';
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"><\/script>
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  <style>${styleContent}</style>
+</head>
+<body style="margin:0">
+  <template id="tpl">${templateContent}</template>
+  <div id="app"></div>
+  <script>
+    const { createApp } = Vue;
+    createApp({ template: document.getElementById('tpl').innerHTML }).mount('#app');
+  <\/script>
+</body>
+</html>`;
+}
+
+const previewDoc = computed(() => (output.value ? buildPreviewDoc(output.value) : ''));
 </script>
 
 <template>
@@ -133,15 +158,17 @@ const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
 
         <!-- Output Section -->
         <div class="lg:col-span-2 flex flex-col gap-3">
-          <div class="bg-black text-green-400 rounded-xl p-6 shadow-lg font-mono text-sm overflow-hidden flex flex-col flex-1">
-            <div class="flex items-center justify-between mb-4">
-              <span class="text-gray-500">$ Generated Component</span>
-              <span v-if="output" class="text-xs text-green-500">Ready</span>
-            </div>
-            <pre v-if="output" class="flex-1 overflow-auto whitespace-pre-wrap break-words">{{ output }}</pre>
-            <div v-else class="flex-1 flex items-center justify-center text-gray-600">
-              <span>{{ loading ? "Generating component..." : "Component output will appear here" }}</span>
-            </div>
+          <iframe
+            v-if="output"
+            :srcdoc="previewDoc"
+            sandbox="allow-scripts"
+            class="w-full rounded-xl border-0 min-h-[500px] bg-white shadow-lg"
+          />
+          <div
+            v-else
+            class="bg-black text-green-400 rounded-xl p-6 shadow-lg font-mono text-sm flex items-center justify-center min-h-[500px]"
+          >
+            <span class="text-gray-600">{{ loading ? "Generating component..." : "Preview will appear here" }}</span>
           </div>
 
           <!-- Metrics Bar -->
