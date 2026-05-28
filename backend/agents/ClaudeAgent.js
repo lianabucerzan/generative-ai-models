@@ -70,19 +70,94 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   async _generateWithAPI(prompt, modelId) {
-    // Tool use loop added in Task 5 — basic SDK call for now
     const start = Date.now();
+
+    const tools = [
+      {
+        name: "get_figma_design",
+        description:
+          "Fetch design data from a Figma node — colors, fonts, dimensions, and a PNG screenshot. " +
+          "Call this when the user provides a Figma URL in their prompt.",
+        input_schema: {
+          type: "object",
+          properties: {
+            figma_url: {
+              type: "string",
+              description: "The full Figma URL including the node-id query parameter.",
+            },
+          },
+          required: ["figma_url"],
+        },
+      },
+    ];
+
+    const messages = [{ role: "user", content: prompt }];
+
     try {
-      const message = await this.client.messages.create({
+      const msg1 = await this.client.messages.create({
         model: modelId,
         max_tokens: 2000,
         system: this.systemPrompt,
-        messages: [{ role: "user", content: prompt }],
+        tools,
+        messages,
       });
+
+      let finalMessage = msg1;
+
+      if (msg1.stop_reason === "tool_use") {
+        const toolUse = msg1.content.find((b) => b.type === "tool_use");
+        const figmaData = this.figmaService
+          ? await this.figmaService.extract(toolUse.input.figma_url)
+          : null;
+
+        const toolResultContent = figmaData?.imageBase64
+          ? [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/png",
+                  data: figmaData.imageBase64,
+                },
+              },
+              {
+                type: "text",
+                text:
+                  `Colors: ${figmaData.tokens.colors.join(", ")}\n` +
+                  `Fonts: ${figmaData.tokens.fonts
+                    .map((f) => `${f.fontFamily} ${f.fontSize}px weight=${f.fontWeight}`)
+                    .join(", ")}\n` +
+                  `Dimensions: ${figmaData.tokens.dimensions.width}×${figmaData.tokens.dimensions.height}px`,
+              },
+            ]
+          : [{ type: "text", text: "Figma data unavailable — generate from prompt only." }];
+
+        finalMessage = await this.client.messages.create({
+          model: modelId,
+          max_tokens: 2000,
+          system: this.systemPrompt,
+          tools,
+          messages: [
+            ...messages,
+            { role: "assistant", content: msg1.content },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: toolUse.id,
+                  content: toolResultContent,
+                },
+              ],
+            },
+          ],
+        });
+      }
+
       const latencyMs = Date.now() - start;
-      const inputTokens = message.usage.input_tokens;
-      const outputTokens = message.usage.output_tokens;
-      const textBlock = message.content.find((b) => b.type === "text");
+      const inputTokens = finalMessage.usage.input_tokens;
+      const outputTokens = finalMessage.usage.output_tokens;
+      const textBlock = finalMessage.content.find((b) => b.type === "text");
       return {
         output: textBlock?.text ?? "",
         metrics: {
