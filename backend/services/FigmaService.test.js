@@ -36,3 +36,45 @@ describe("FigmaService.parseUrl", () => {
     assert.equal(result, null);
   });
 });
+
+describe("FigmaService.exportPng", () => {
+  it("fetches image URL from Figma and returns base64", async () => {
+    const svc = new FigmaService("fake-key");
+
+    let fetchCalls = [];
+    const originalFetch = globalThis.fetch;
+    const fakeImageBuffer = Buffer.from("fakepng");
+    globalThis.fetch = async (url, opts) => {
+      fetchCalls.push({ url: url.toString(), opts });
+      if (url.includes("api.figma.com/v1/images")) {
+        return {
+          json: async () => ({
+            images: { "10:20": "https://cdn.figma.com/img/fake.png" },
+          }),
+        };
+      }
+      return {
+        arrayBuffer: async () => fakeImageBuffer.buffer.slice(fakeImageBuffer.byteOffset, fakeImageBuffer.byteOffset + fakeImageBuffer.byteLength),
+      };
+    };
+
+    const result = await svc.exportPng("ABC123", "10:20");
+    assert.equal(result, fakeImageBuffer.toString("base64"));
+    assert.equal(
+      fetchCalls[0].url,
+      "https://api.figma.com/v1/images/ABC123?ids=10%3A20&format=png&scale=2"
+    );
+    assert.equal(fetchCalls[0].opts.headers["X-Figma-Token"], "fake-key");
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it("returns null when image URL is missing from response", async () => {
+    const svc = new FigmaService("fake-key");
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({ json: async () => ({ images: {} }) });
+    const result = await svc.exportPng("ABC123", "10:20");
+    assert.equal(result, null);
+    globalThis.fetch = originalFetch;
+  });
+});

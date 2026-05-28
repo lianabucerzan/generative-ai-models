@@ -15,8 +15,17 @@ export class FigmaService {
     return { fileKey, nodeId };
   }
 
-  async exportPng(_fileKey, _nodeId) {
-    throw new Error("not implemented");
+  async exportPng(fileKey, nodeId) {
+    const res = await fetch(
+      `${this.baseUrl}/images/${fileKey}?ids=${encodeURIComponent(nodeId)}&format=png&scale=2`,
+      { headers: { "X-Figma-Token": this.apiKey } }
+    );
+    const data = await res.json();
+    const imageUrl = data.images?.[nodeId];
+    if (!imageUrl) return null;
+    const imageRes = await fetch(imageUrl);
+    const buffer = await imageRes.arrayBuffer();
+    return Buffer.from(buffer).toString("base64");
   }
 
   async extractTokens(_fileKey, _nodeId) {
