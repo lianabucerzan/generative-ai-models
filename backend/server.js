@@ -3,14 +3,18 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { AgentFactory } from "./agents/AgentFactory.js";
+import { createFigmaService } from "./services/FigmaService.js";
 
 dotenv.config();
 
 const app = express();
 const agentFactory = new AgentFactory();
+const figmaService = createFigmaService();
 
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
+
+const FIGMA_URL_RE = /https:\/\/(?:www\.)?figma\.com\/\S+node-id=[\w%:-]+/;
 
 app.get("/agents", (req, res) => {
   res.json({ models: agentFactory.getModels() });
@@ -40,7 +44,18 @@ app.post("/generate", async (req, res) => {
         error: `Agent for provider '${provider}' is not initialized`,
       });
     }
-    const { output, metrics } = await agent.generate(prompt, model, image ?? null);
+
+    const figmaUrlMatch = prompt?.match(FIGMA_URL_RE);
+    const figmaUrl = figmaUrlMatch?.[0] ?? null;
+    const cleanPrompt = figmaUrl
+      ? prompt.replace(figmaUrl, "").trim() ||
+        "Replicate this design as an HTML component with Tailwind CSS"
+      : prompt;
+
+    const figmaData =
+      figmaUrl && figmaService ? await figmaService.extract(figmaUrl) : null;
+
+    const { output, metrics } = await agent.generate(cleanPrompt, model, image ?? null, figmaData);
 
     res.json({ output, metrics });
   } catch (error) {
@@ -51,5 +66,9 @@ app.post("/generate", async (req, res) => {
 
 app.listen(3000, () => {
   console.log("Server running on port 3000");
-  console.log("Models:", agentFactory.getModels().map((m) => m.displayName).join(", "));
+  console.log(
+    "Models:",
+    agentFactory.getModels().map((m) => m.displayName).join(", ")
+  );
+  console.log("Figma integration:", figmaService ? "enabled" : "disabled (no FIGMA_API_KEY)");
 });
