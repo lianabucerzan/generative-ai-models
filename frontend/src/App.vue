@@ -61,6 +61,16 @@ const generateComponent = async () => {
   });
 };
 
+const buildPreviewDoc = (html) => `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"><\/script>
+</head>
+<body class="p-4">${html}</body>
+</html>`;
+
 const isNullish = (val) => val === null || val === undefined || (typeof val === "number" && isNaN(val));
 const fmt = (val) => (!isNullish(val) ? val : "—");
 const fmtCost = (val) => (!isNullish(val) ? `~ $${val}` : "—");
@@ -118,7 +128,12 @@ const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
               </svg>
             </div>
             <!-- Output -->
-            <div v-else-if="results[model.id]?.output" v-html="results[model.id].output" />
+            <iframe
+              v-else-if="results[model.id]?.output"
+              :srcdoc="buildPreviewDoc(results[model.id].output)"
+              sandbox="allow-scripts allow-same-origin"
+              class="w-full h-64 border-0"
+            />
             <!-- Error -->
             <div v-else-if="results[model.id]?.error" class="h-64 flex items-center justify-center text-sm text-red-400">
               {{ results[model.id].error }}
