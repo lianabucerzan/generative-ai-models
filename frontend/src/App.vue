@@ -158,7 +158,7 @@ const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
             <textarea
               v-model="prompt"
               @paste="handlePaste"
-              :placeholder="imagePreview ? 'Add instructions (optional)' : 'Describe a component, or paste / drop a screenshot…'"
+              :placeholder="imagePreview ? 'Add instructions (optional)' : 'Describe a UI component — or paste a Figma frame URL anywhere in your prompt'"
               class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white shadow-sm resize-none h-16 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
 
