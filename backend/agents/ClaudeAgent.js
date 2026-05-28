@@ -46,15 +46,12 @@ export class ClaudeAgent extends BaseAgent {
     }
   }
 
-  async generate(prompt, modelId, image = null) {
+  async generate(prompt, modelId, figmaData = null) {
     if (this.client) {
-      return this._generateWithAPI(prompt, modelId, image);
+      return this._generateWithAPI(prompt, modelId, figmaData);
     }
     if (this.useCLI) {
-      if (image) {
-        throw new Error("Image input requires an API key — add ANTHROPIC_API_KEY to backend/.env");
-      }
-      return this._generateWithCLI(prompt, modelId);
+      return this._generateWithCLI(prompt, modelId, figmaData);
     }
     const start = Date.now();
     return {
@@ -63,20 +60,32 @@ export class ClaudeAgent extends BaseAgent {
     };
   }
 
-  async _generateWithAPI(prompt, modelId, image = null) {
+  async _generateWithAPI(prompt, modelId, figmaData = null) {
     const start = Date.now();
     try {
-      const content = [];
-      if (image) {
-        content.push({ type: "image", source: { type: "base64", media_type: image.mimeType, data: image.data } });
-      }
-      content.push({ type: "text", text: prompt || "Recreate this UI as plain HTML with Tailwind CSS classes." });
+      const userContent =
+        figmaData?.imageBase64
+          ? [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/png",
+                  data: figmaData.imageBase64,
+                },
+              },
+              {
+                type: "text",
+                text: this._buildFigmaPrompt(prompt, figmaData.tokens),
+              },
+            ]
+          : this._buildFigmaPrompt(prompt, figmaData?.tokens ?? null);
 
       const message = await this.client.messages.create({
         model: modelId,
-        max_tokens: 4096,
+        max_tokens: 2000,
         system: this.systemPrompt,
-        messages: [{ role: "user", content }],
+        messages: [{ role: "user", content: userContent }],
       });
       const latencyMs = Date.now() - start;
       const inputTokens = message.usage.input_tokens;
@@ -94,9 +103,8 @@ export class ClaudeAgent extends BaseAgent {
     } catch (error) {
       console.warn("Claude Agent: API call failed, falling back to CLI or mock");
       if (this.useCLI) {
-        return this._generateWithCLI(prompt, modelId);
+        return this._generateWithCLI(prompt, modelId, figmaData);
       }
-      // latencyMs includes the failed request time — reflects total user wait
       const latencyMs = Date.now() - start;
       return {
         output: this._generateWithMock(prompt),
@@ -105,15 +113,15 @@ export class ClaudeAgent extends BaseAgent {
     }
   }
 
-  _generateWithCLI(prompt, modelId) {
+  _generateWithCLI(prompt, modelId, figmaData = null) {
     const start = Date.now();
-    // Strip CLAUDECODE so the subprocess isn't blocked by the nested-session guard
     const env = { ...process.env };
     delete env.CLAUDECODE;
 
     return new Promise((resolve) => {
       const cliSystemPrompt = this.systemPrompt + " No questions, no explanations.";
-      const cliPrompt = `${prompt}. Output ONLY the SFC code, no questions or explanations.`;
+      const enhancedPrompt = this._buildFigmaPrompt(prompt, figmaData?.tokens ?? null);
+      const cliPrompt = `${enhancedPrompt}. Output ONLY the HTML code, no questions or explanations.`;
 
       const proc = spawn(
         "claude",
@@ -172,6 +180,21 @@ export class ClaudeAgent extends BaseAgent {
         });
       });
     });
+  }
+
+  _buildFigmaPrompt(prompt, tokens) {
+    if (!tokens) return prompt;
+    const lines = ["Design tokens from Figma:"];
+    if (tokens.colors?.length)
+      lines.push(`Colors: ${tokens.colors.join(", ")}`);
+    if (tokens.fonts?.length)
+      lines.push(
+        `Fonts: ${tokens.fonts.map((f) => `${f.fontFamily} ${f.fontSize}px weight=${f.fontWeight}`).join(", ")}`
+      );
+    if (tokens.dimensions?.width)
+      lines.push(`Dimensions: ${tokens.dimensions.width}×${tokens.dimensions.height}px`);
+    lines.push("", prompt, "", "Replicate this design faithfully using the exact colors and typography shown.");
+    return lines.join("\n");
   }
 
   _generateWithMock(prompt) {
