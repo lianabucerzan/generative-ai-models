@@ -28,12 +28,63 @@ export class FigmaService {
     return Buffer.from(buffer).toString("base64");
   }
 
-  async extractTokens(_fileKey, _nodeId) {
-    throw new Error("not implemented");
+  async extractTokens(fileKey, nodeId) {
+    const res = await fetch(
+      `${this.baseUrl}/files/${fileKey}/nodes?ids=${encodeURIComponent(nodeId)}`,
+      { headers: { "X-Figma-Token": this.apiKey } }
+    );
+    const data = await res.json();
+    const nodeEntry = data.nodes?.[nodeId];
+    if (!nodeEntry) return { colors: [], fonts: [], dimensions: {} };
+
+    const node = nodeEntry.document;
+    const colors = [];
+    const fonts = [];
+
+    const traverse = (n) => {
+      (n.fills ?? [])
+        .filter((f) => f.type === "SOLID" && f.color)
+        .forEach((f) => {
+          const hex =
+            "#" +
+            [f.color.r, f.color.g, f.color.b]
+              .map((v) => Math.round(v * 255).toString(16).padStart(2, "0"))
+              .join("");
+          if (!colors.includes(hex)) colors.push(hex);
+        });
+
+      if (n.style?.fontFamily) {
+        const { fontFamily, fontSize, fontWeight } = n.style;
+        if (!fonts.some((f) => f.fontFamily === fontFamily && f.fontSize === fontSize)) {
+          fonts.push({ fontFamily, fontSize, fontWeight });
+        }
+      }
+
+      (n.children ?? []).forEach(traverse);
+    };
+    traverse(node);
+
+    const dimensions = node.absoluteBoundingBox
+      ? { width: node.absoluteBoundingBox.width, height: node.absoluteBoundingBox.height }
+      : {};
+
+    return { colors, fonts, dimensions };
   }
 
   async extract(url) {
-    throw new Error("not implemented");
+    const parsed = this.parseUrl(url);
+    if (!parsed) return null;
+    const { fileKey, nodeId } = parsed;
+    try {
+      const [imageBase64, tokens] = await Promise.all([
+        this.exportPng(fileKey, nodeId),
+        this.extractTokens(fileKey, nodeId),
+      ]);
+      return { imageBase64, tokens };
+    } catch (err) {
+      console.warn("FigmaService.extract failed:", err.message);
+      return null;
+    }
   }
 }
 
