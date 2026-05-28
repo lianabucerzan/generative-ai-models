@@ -41,17 +41,23 @@ export class FigmaService {
     const colors = [];
     const fonts = [];
 
+    const toHex = (r, g, b) =>
+      "#" + [r, g, b].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+
     const traverse = (n) => {
-      (n.fills ?? [])
-        .filter((f) => f.type === "SOLID" && f.color)
-        .forEach((f) => {
-          const hex =
-            "#" +
-            [f.color.r, f.color.g, f.color.b]
-              .map((v) => Math.round(v * 255).toString(16).padStart(2, "0"))
-              .join("");
+      (n.fills ?? []).forEach((f) => {
+        if (f.type === "SOLID" && f.color) {
+          const hex = toHex(f.color.r, f.color.g, f.color.b);
           if (!colors.includes(hex)) colors.push(hex);
-        });
+        } else if (f.type?.startsWith("GRADIENT") && f.gradientStops) {
+          // Extract dominant gradient color (first stop)
+          const stop = f.gradientStops[0];
+          if (stop?.color) {
+            const hex = toHex(stop.color.r, stop.color.g, stop.color.b);
+            if (!colors.includes(hex)) colors.push(hex);
+          }
+        }
+      });
 
       if (n.style?.fontFamily) {
         const { fontFamily, fontSize, fontWeight } = n.style;
@@ -63,6 +69,21 @@ export class FigmaService {
       (n.children ?? []).forEach(traverse);
     };
     traverse(node);
+
+    // If node is a component instance, also fetch the master component to get inherited fills
+    if (node.type === "INSTANCE" && node.componentId) {
+      try {
+        const masterRes = await fetch(
+          `${this.baseUrl}/files/${fileKey}/nodes?ids=${encodeURIComponent(node.componentId)}`,
+          { headers: { "X-Figma-Token": this.apiKey } }
+        );
+        const masterData = await masterRes.json();
+        const masterNode = masterData.nodes?.[node.componentId]?.document;
+        if (masterNode) traverse(masterNode);
+      } catch {
+        // master component fetch is best-effort
+      }
+    }
 
     const dimensions = node.absoluteBoundingBox
       ? { width: node.absoluteBoundingBox.width, height: node.absoluteBoundingBox.height }

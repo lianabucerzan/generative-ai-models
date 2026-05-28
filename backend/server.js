@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import { AgentFactory } from "./agents/AgentFactory.js";
 import { createFigmaService } from "./services/FigmaService.js";
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const app = express();
 const agentFactory = new AgentFactory();
