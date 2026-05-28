@@ -46,11 +46,14 @@ export class ClaudeAgent extends BaseAgent {
     }
   }
 
-  async generate(prompt, modelId) {
+  async generate(prompt, modelId, image = null) {
     if (this.client) {
-      return this._generateWithAPI(prompt, modelId);
+      return this._generateWithAPI(prompt, modelId, image);
     }
     if (this.useCLI) {
+      if (image) {
+        throw new Error("Image input requires an API key — add ANTHROPIC_API_KEY to backend/.env");
+      }
       return this._generateWithCLI(prompt, modelId);
     }
     const start = Date.now();
@@ -60,14 +63,20 @@ export class ClaudeAgent extends BaseAgent {
     };
   }
 
-  async _generateWithAPI(prompt, modelId) {
+  async _generateWithAPI(prompt, modelId, image = null) {
     const start = Date.now();
     try {
+      const content = [];
+      if (image) {
+        content.push({ type: "image", source: { type: "base64", media_type: image.mimeType, data: image.data } });
+      }
+      content.push({ type: "text", text: prompt || "Recreate this UI as plain HTML with Tailwind CSS classes." });
+
       const message = await this.client.messages.create({
         model: modelId,
-        max_tokens: 2000,
+        max_tokens: 4096,
         system: this.systemPrompt,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content }],
       });
       const latencyMs = Date.now() - start;
       const inputTokens = message.usage.input_tokens;

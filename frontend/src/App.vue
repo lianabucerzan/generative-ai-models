@@ -7,6 +7,52 @@ const models = ref([]);
 const results = ref({});
 const error = ref("");
 
+const imageData = ref(null);
+const imageMimeType = ref(null);
+const imagePreview = ref(null);
+const fileInputRef = ref(null);
+
+const loadImageFile = (file) => {
+  if (!file || !file.type.startsWith("image/")) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const [header, data] = dataUrl.split(",");
+    imageMimeType.value = header.match(/data:([^;]+)/)[1];
+    imageData.value = data;
+    imagePreview.value = dataUrl;
+  };
+  reader.readAsDataURL(file);
+};
+
+const handlePaste = (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith("image/")) {
+      e.preventDefault();
+      loadImageFile(item.getAsFile());
+      break;
+    }
+  }
+};
+
+const handleDrop = (e) => {
+  const file = e.dataTransfer?.files?.[0];
+  if (file) loadImageFile(file);
+};
+
+const handleFileInput = (e) => {
+  loadImageFile(e.target.files?.[0]);
+};
+
+const clearImage = () => {
+  imageData.value = null;
+  imageMimeType.value = null;
+  imagePreview.value = null;
+  if (fileInputRef.value) fileInputRef.value.value = "";
+};
+
 onMounted(async () => {
   try {
     const response = await axios.get("http://localhost:3000/agents");
@@ -22,10 +68,18 @@ onMounted(async () => {
 });
 
 const anyLoading = computed(() => Object.values(results.value).some((r) => r.loading));
+const hasContent = computed(() => prompt.value || imageData.value || Object.keys(results.value).length > 0);
+
+const clearAll = () => {
+  prompt.value = "";
+  error.value = "";
+  results.value = {};
+  clearImage();
+};
 
 const generateComponent = async () => {
-  if (!prompt.value.trim()) {
-    error.value = "Please enter a prompt";
+  if (!prompt.value.trim() && !imageData.value) {
+    error.value = "Please enter a prompt or paste an image";
     return;
   }
   error.value = "";
@@ -40,10 +94,11 @@ const generateComponent = async () => {
   // Fire all requests in parallel — each updates its slot as it resolves
   models.value.forEach(async (model) => {
     try {
-      const res = await axios.post("http://localhost:3000/generate", {
-        prompt: prompt.value,
-        model: model.id,
-      });
+      const payload = { prompt: prompt.value, model: model.id };
+      if (imageData.value) {
+        payload.image = { data: imageData.value, mimeType: imageMimeType.value };
+      }
+      const res = await axios.post("http://localhost:3000/generate", payload);
       results.value[model.id] = {
         output: res.data.output,
         metrics: res.data.metrics,
@@ -83,21 +138,59 @@ const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
 
       <!-- Header + prompt bar -->
       <div class="mb-8">
-        <h1 class="text-4xl font-bold text-gray-900 mb-5">LLM UI Arena</h1>
+        <h1 class="text-4xl font-bold text-gray-900 mb-5">Generative UI</h1>
 
         <div class="flex gap-3 items-start">
-          <textarea
-            v-model="prompt"
-            placeholder="Describe a UI component, e.g. 'Create a pricing card with three tiers'"
-            class="flex-1 px-4 py-3 border border-gray-300 rounded-xl bg-white shadow-sm resize-none h-16 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <button
-            @click="generateComponent"
-            :disabled="anyLoading"
-            class="px-8 py-3 h-16 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold rounded-xl transition"
-          >
-            {{ anyLoading ? "Generating…" : "Generate" }}
-          </button>
+          <div class="flex-1 flex flex-col gap-2">
+            <!-- Image preview -->
+            <div
+              v-if="imagePreview"
+              class="relative inline-flex"
+            >
+              <img :src="imagePreview" class="max-h-40 rounded-xl border border-gray-200 object-contain" />
+              <button
+                @click="clearImage"
+                class="absolute -top-2 -right-2 w-6 h-6 bg-white border border-gray-300 rounded-full text-gray-500 hover:text-red-500 shadow text-xs font-bold flex items-center justify-center"
+              >✕</button>
+            </div>
+
+            <!-- Textarea -->
+            <textarea
+              v-model="prompt"
+              @paste="handlePaste"
+              :placeholder="imagePreview ? 'Add instructions (optional)' : 'Describe a component, or paste / drop a screenshot…'"
+              class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white shadow-sm resize-none h-16 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+
+            <!-- Drop zone (hidden file input) -->
+            <div
+              class="border-2 border-dashed border-gray-200 rounded-xl px-4 py-2 text-xs text-gray-400 text-center cursor-pointer hover:border-blue-300 hover:text-blue-400 transition"
+              @dragover.prevent
+              @drop.prevent="handleDrop"
+              @click="fileInputRef.click()"
+            >
+              Drop an image here or click to upload
+            </div>
+            <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileInput" />
+          </div>
+
+          <div class="flex flex-col gap-2 self-end">
+            <button
+              @click="generateComponent"
+              :disabled="anyLoading"
+              class="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold rounded-xl transition"
+            >
+              {{ anyLoading ? "Generating…" : "Generate" }}
+            </button>
+            <button
+              v-if="hasContent"
+              @click="clearAll"
+              :disabled="anyLoading"
+              class="px-8 py-2 bg-white hover:bg-gray-50 disabled:opacity-40 border border-gray-300 text-gray-600 font-medium rounded-xl transition text-sm"
+            >
+              Clear
+            </button>
+          </div>
         </div>
 
         <p v-if="error" class="mt-2 text-sm text-red-600">{{ error }}</p>

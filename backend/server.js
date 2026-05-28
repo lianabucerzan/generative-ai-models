@@ -10,7 +10,7 @@ const app = express();
 const agentFactory = new AgentFactory();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 app.get("/agents", (req, res) => {
   res.json({ models: agentFactory.getModels() });
@@ -18,10 +18,13 @@ app.get("/agents", (req, res) => {
 
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt, model } = req.body;
+    const { prompt, model, image } = req.body;
 
-    if (!prompt || !model) {
-      return res.status(400).json({ error: "prompt and model are required" });
+    if (!model) {
+      return res.status(400).json({ error: "model is required" });
+    }
+    if (!prompt && !image) {
+      return res.status(400).json({ error: "prompt or image is required" });
     }
 
     const provider = agentFactory.getProviderForModel(model);
@@ -37,12 +40,12 @@ app.post("/generate", async (req, res) => {
         error: `Agent for provider '${provider}' is not initialized`,
       });
     }
-    const { output, metrics } = await agent.generate(prompt, model);
+    const { output, metrics } = await agent.generate(prompt, model, image ?? null);
 
     res.json({ output, metrics });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Generation failed", details: error.message });
+    res.status(500).json({ error: error.message || "Generation failed" });
   }
 });
 

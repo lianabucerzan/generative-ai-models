@@ -6,7 +6,7 @@ export class GeminiAgent extends BaseAgent {
     this.client = null;
   }
 
-  async generate(prompt, modelId) {
+  async generate(prompt, modelId, image = null) {
     const start = Date.now();
     const output = this._generateWithMock(prompt);
     const latencyMs = Date.now() - start;
