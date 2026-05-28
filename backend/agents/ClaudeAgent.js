@@ -181,14 +181,40 @@ export class ClaudeAgent extends BaseAgent {
     }
   }
 
-  _generateWithCLI(prompt, modelId) {
+  _buildFigmaPrompt(prompt, tokens) {
+    if (!tokens) return prompt;
+    const lines = ["Design tokens from Figma:"];
+    if (tokens.colors?.length)
+      lines.push(`Colors: ${tokens.colors.join(", ")}`);
+    if (tokens.fonts?.length)
+      lines.push(`Fonts: ${tokens.fonts.map((f) => `${f.fontFamily} ${f.fontSize}px weight=${f.fontWeight}`).join(", ")}`);
+    if (tokens.dimensions?.width)
+      lines.push(`Dimensions: ${tokens.dimensions.width}×${tokens.dimensions.height}px`);
+    lines.push("", prompt, "", "Replicate this design faithfully using the exact colors and typography shown.");
+    return lines.join("\n");
+  }
+
+  async _generateWithCLI(prompt, modelId) {
     const start = Date.now();
     const env = { ...process.env };
     delete env.CLAUDECODE;
 
+    // Extract Figma URL from prompt and fetch tokens if available
+    const figmaUrlMatch = prompt.match(/https:\/\/(?:www\.)?figma\.com\/\S+node-id=[\w%:-]+/);
+    const figmaUrl = figmaUrlMatch?.[0] ?? null;
+    const cleanPrompt = figmaUrl
+      ? prompt.replace(figmaUrl, "").trim() || "Replicate this design as an HTML component with Tailwind CSS"
+      : prompt;
+
+    const figmaData = figmaUrl && this.figmaService
+      ? await this.figmaService.extract(figmaUrl).catch(() => null)
+      : null;
+
+    const enhancedPrompt = this._buildFigmaPrompt(cleanPrompt, figmaData?.tokens ?? null);
+
     return new Promise((resolve) => {
       const cliSystemPrompt = this.systemPrompt + " No questions, no explanations.";
-      const cliPrompt = `${prompt}. Output ONLY the HTML code, no questions or explanations.`;
+      const cliPrompt = `${enhancedPrompt}. Output ONLY the HTML code, no questions or explanations.`;
 
       const proc = spawn(
         "claude",
