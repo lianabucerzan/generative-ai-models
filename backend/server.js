@@ -22,13 +22,13 @@ app.get("/agents", (req, res) => {
 
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt, model, image } = req.body;
+    const { prompt, model } = req.body;
 
     if (!model) {
       return res.status(400).json({ error: "model is required" });
     }
-    if (!prompt && !image) {
-      return res.status(400).json({ error: "prompt or image is required" });
+    if (!prompt) {
+      return res.status(400).json({ error: "prompt is required" });
     }
 
     const provider = agentFactory.getProviderForModel(model);
@@ -55,7 +55,7 @@ app.post("/generate", async (req, res) => {
     const figmaData =
       figmaUrl && figmaService ? await figmaService.extract(figmaUrl) : null;
 
-    const { output, metrics } = await agent.generate(cleanPrompt, model, image ?? null, figmaData);
+    const { output, metrics } = await agent.generate(cleanPrompt, model, figmaData);
 
     res.json({ output, metrics });
   } catch (error) {
