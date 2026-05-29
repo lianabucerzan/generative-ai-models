@@ -57,11 +57,14 @@ export class ClaudeAgent extends BaseAgent {
     console.log("Figma:", this.figmaService ? "MCP ready" : "disabled (no FIGMA_API_KEY or MCP unavailable)");
   }
 
-  async generate(prompt, modelId) {
+  async generate(prompt, modelId, image = null) {
     if (this.client) {
-      return this._generateWithAPI(prompt, modelId);
+      return this._generateWithAPI(prompt, modelId, image);
     }
     if (this.useCLI) {
+      if (image) {
+        throw new Error("Image input requires an API key — add ANTHROPIC_API_KEY to backend/.env");
+      }
       return this._generateWithCLI(prompt, modelId);
     }
     const start = Date.now();
@@ -71,7 +74,7 @@ export class ClaudeAgent extends BaseAgent {
     };
   }
 
-  async _generateWithAPI(prompt, modelId) {
+  async _generateWithAPI(prompt, modelId, image = null) {
     const start = Date.now();
 
     const tools = [
@@ -93,7 +96,14 @@ export class ClaudeAgent extends BaseAgent {
       },
     ];
 
-    const messages = [{ role: "user", content: prompt }];
+    const userContent = image
+      ? [
+          { type: "image", source: { type: "base64", media_type: image.mimeType, data: image.data } },
+          { type: "text", text: prompt || "Recreate this UI as plain HTML with Tailwind CSS classes." },
+        ]
+      : prompt;
+
+    const messages = [{ role: "user", content: userContent }];
 
     try {
       const msg1 = await this.client.messages.create({
