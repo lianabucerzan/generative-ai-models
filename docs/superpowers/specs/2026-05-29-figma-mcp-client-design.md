@@ -52,29 +52,34 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 **`parseUrl(url)`** — identical to `FigmaService.parseUrl()`. Reused, not duplicated.
 
+**Transport:** `figma-developer-mcp` v0.9.0 runs as an **HTTP server on port 3333** (not stdio).
+Uses `StreamableHTTPClientTransport` from `@modelcontextprotocol/sdk/client/streamableHttp.js`.
+
+**Available tools (verified):**
+- `get_figma_data(fileKey, nodeId, depth)` — returns raw Figma node JSON
+- `download_figma_images(fileKey, nodes, pngScale, localPath)` — saves to disk, not used
+
 **`extract(url)`:**
 1. `parseUrl(url)` → `{ fileKey, nodeId }` or null
-2. `client.callTool({ name: "get_file", arguments: { fileKey, nodeIds: [nodeId] } })`
-3. Parse MCP JSON response → extract tokens using same logic as `FigmaService.extractTokens` (fills, strokes, effects, cornerRadius, padding, fonts)
-4. MCP automatically returns master component data for INSTANCE nodes — no second manual fetch needed
-5. PNG export remains via Figma REST API (MCP does not export images) — reuses `FigmaService.exportPng()`
+2. `client.callTool({ name: "get_figma_data", arguments: { fileKey, nodeId, depth: 2 } })`
+3. MCP returns full node JSON including master component data for INSTANCE nodes
+4. **CLI mode:** parse JSON with `extractTokensFromNode()` → inject as text in prompt
+5. **API key mode:** send raw JSON string as `tool_result` → Claude interprets it directly
 
 **`createMcpFigmaService()` (async factory):**
 ```js
 export async function createMcpFigmaService() {
   if (!process.env.FIGMA_API_KEY) return null;
   try {
-    const transport = new StdioClientTransport({
-      command: "npx",
-      args: ["-y", "figma-developer-mcp"],
-      env: { ...process.env },
-    });
+    const proc = spawn("npx", ["-y", "figma-developer-mcp"], { env: { ...process.env }, stdio: "ignore", detached: false });
+    await waitForPort(3333, 5000); // poll until server ready
+    const transport = new StreamableHTTPClientTransport(new URL("http://127.0.0.1:3333/mcp"));
     const client = new Client({ name: "llm-arena", version: "1.0.0" }, { capabilities: {} });
     await client.connect(transport);
     console.log("Figma: MCP client connected");
-    return new McpFigmaService(client);
+    return new McpFigmaService(client, proc);
   } catch (err) {
-    console.warn("Figma: MCP connection failed, falling back to REST API:", err.message);
+    console.warn("Figma: MCP connection failed:", err.message);
     return null;
   }
 }
