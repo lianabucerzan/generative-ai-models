@@ -186,11 +186,25 @@ export class ClaudeAgent extends BaseAgent {
     const lines = ["Design tokens from Figma:"];
     if (tokens.colors?.length)
       lines.push(`Colors: ${tokens.colors.join(", ")}`);
+    if (tokens.gradients?.length)
+      lines.push(`Gradients: ${tokens.gradients.map(g =>
+        `${g.type}(${g.stops.map(s => `${s.color} at ${s.position}%`).join(", ")})`
+      ).join(" | ")}`);
     if (tokens.fonts?.length)
-      lines.push(`Fonts: ${tokens.fonts.map((f) => `${f.fontFamily} ${f.fontSize}px weight=${f.fontWeight}`).join(", ")}`);
+      lines.push(`Fonts: ${tokens.fonts.map(f => `${f.fontFamily} ${f.fontSize}px weight=${f.fontWeight}`).join(", ")}`);
     if (tokens.dimensions?.width)
       lines.push(`Dimensions: ${tokens.dimensions.width}×${tokens.dimensions.height}px`);
-    lines.push("", prompt, "", "Replicate this design faithfully using the exact colors and typography shown.");
+    if (tokens.cornerRadius != null)
+      lines.push(`Border radius: ${tokens.cornerRadius}px`);
+    if (tokens.padding)
+      lines.push(`Padding: top=${tokens.padding.top}px right=${tokens.padding.right}px bottom=${tokens.padding.bottom}px left=${tokens.padding.left}px`);
+    if (tokens.strokes?.length)
+      lines.push(`Border: ${tokens.strokes.map(s => `${s.weight}px solid ${s.color}`).join(", ")}`);
+    if (tokens.effects?.length)
+      lines.push(`Shadows: ${tokens.effects.map(e =>
+        `${e.type === "INNER_SHADOW" ? "inset " : ""}${e.offsetX}px ${e.offsetY}px ${e.radius}px ${e.spread}px ${e.color}`
+      ).join(", ")}`);
+    lines.push("", prompt, "", "Replicate this design faithfully using the exact values above.");
     return lines.join("\n");
   }
 

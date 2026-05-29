@@ -40,25 +40,59 @@ export class FigmaService {
     const node = nodeEntry.document;
     const colors = [];
     const fonts = [];
+    const gradients = [];
+    const strokes = [];
+    const effects = [];
 
     const toHex = (r, g, b) =>
       "#" + [r, g, b].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
 
-    const traverse = (n) => {
-      (n.fills ?? []).forEach((f) => {
+    const toRgba = (c) =>
+      `rgba(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}, ${Math.round((c.a ?? 1) * 100) / 100})`;
+
+    const extractFromNode = (n) => {
+      // fills: solid colors + full gradients
+      (n.fills ?? []).filter(f => f.visible !== false).forEach((f) => {
         if (f.type === "SOLID" && f.color) {
           const hex = toHex(f.color.r, f.color.g, f.color.b);
           if (!colors.includes(hex)) colors.push(hex);
         } else if (f.type?.startsWith("GRADIENT") && f.gradientStops) {
-          // Extract dominant gradient color (first stop)
-          const stop = f.gradientStops[0];
-          if (stop?.color) {
-            const hex = toHex(stop.color.r, stop.color.g, stop.color.b);
-            if (!colors.includes(hex)) colors.push(hex);
-          }
+          const stops = f.gradientStops.map(s => ({
+            color: toHex(s.color.r, s.color.g, s.color.b),
+            opacity: Math.round((s.color.a ?? 1) * 100) / 100,
+            position: Math.round(s.position * 100),
+          }));
+          gradients.push({ type: f.type, stops });
+          // also add first stop as solid color fallback
+          const hex = stops[0]?.color;
+          if (hex && !colors.includes(hex)) colors.push(hex);
         }
       });
 
+      // strokes (border)
+      (n.strokes ?? []).filter(s => s.visible !== false && s.type === "SOLID").forEach((s) => {
+        strokes.push({
+          color: toRgba({ ...s.color, a: s.opacity ?? s.color?.a ?? 1 }),
+          weight: n.strokeWeight ?? 1,
+          align: n.strokeAlign ?? "INSIDE",
+        });
+      });
+
+      // effects (drop shadow / inner shadow / blur)
+      (n.effects ?? []).filter(e => e.visible !== false).forEach((e) => {
+        if (e.type === "DROP_SHADOW" || e.type === "INNER_SHADOW") {
+          effects.push({
+            type: e.type,
+            color: toRgba(e.color),
+            offsetX: e.offset?.x ?? 0,
+            offsetY: e.offset?.y ?? 0,
+            radius: e.radius ?? 0,
+            spread: e.spread ?? 0,
+          });
+        }
+      });
+
+      // typography
       if (n.style?.fontFamily) {
         const { fontFamily, fontSize, fontWeight } = n.style;
         if (!fonts.some((f) => f.fontFamily === fontFamily && f.fontSize === fontSize)) {
@@ -66,11 +100,11 @@ export class FigmaService {
         }
       }
 
-      (n.children ?? []).forEach(traverse);
+      (n.children ?? []).forEach(extractFromNode);
     };
-    traverse(node);
+    extractFromNode(node);
 
-    // If node is a component instance, also fetch the master component to get inherited fills
+    // If node is a component instance, also fetch the master component to get inherited styles
     if (node.type === "INSTANCE" && node.componentId) {
       try {
         const masterRes = await fetch(
@@ -79,7 +113,7 @@ export class FigmaService {
         );
         const masterData = await masterRes.json();
         const masterNode = masterData.nodes?.[node.componentId]?.document;
-        if (masterNode) traverse(masterNode);
+        if (masterNode) extractFromNode(masterNode);
       } catch {
         // master component fetch is best-effort
       }
@@ -89,7 +123,18 @@ export class FigmaService {
       ? { width: node.absoluteBoundingBox.width, height: node.absoluteBoundingBox.height }
       : {};
 
-    return { colors, fonts, dimensions };
+    const cornerRadius = node.cornerRadius ?? node.rectangleCornerRadii?.[0] ?? null;
+
+    const padding = (node.paddingTop != null || node.paddingLeft != null)
+      ? {
+          top: node.paddingTop ?? 0,
+          right: node.paddingRight ?? 0,
+          bottom: node.paddingBottom ?? 0,
+          left: node.paddingLeft ?? 0,
+        }
+      : null;
+
+    return { colors, fonts, dimensions, gradients, strokes, effects, cornerRadius, padding };
   }
 
   async extract(url) {
