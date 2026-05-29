@@ -1,10 +1,9 @@
-// backend/server.js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { AgentFactory } from "./agents/AgentFactory.js";
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const app = express();
 const agentFactory = new AgentFactory();
@@ -40,6 +39,7 @@ app.post("/generate", async (req, res) => {
         error: `Agent for provider '${provider}' is not initialized`,
       });
     }
+
     const { output, metrics } = await agent.generate(prompt, model, image ?? null);
 
     res.json({ output, metrics });
