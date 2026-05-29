@@ -12,7 +12,9 @@ export class BaseAgent {
   }
 
   // Returns { output: string, metrics: { modelId, inputTokens, outputTokens, latencyMs, estimatedCostUsd } }
-  async generate(prompt, modelId) {
+  // inputTokens, outputTokens, estimatedCostUsd are null when using mock generation.
+  // image: { data: base64String, mimeType: string } | null
+  async generate(prompt, modelId, image = null) {
     throw new Error("generate() must be implemented by subclass");
   }
 
