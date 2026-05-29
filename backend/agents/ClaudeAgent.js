@@ -108,7 +108,7 @@ export class ClaudeAgent extends BaseAgent {
     try {
       const msg1 = await this.client.messages.create({
         model: modelId,
-        max_tokens: 2000,
+        max_tokens: 4096,
         system: this.systemPrompt,
         tools,
         messages,
@@ -128,7 +128,7 @@ export class ClaudeAgent extends BaseAgent {
 
         finalMessage = await this.client.messages.create({
           model: modelId,
-          max_tokens: 2000,
+          max_tokens: 4096,
           system: this.systemPrompt,
           tools,
           messages: [
@@ -200,7 +200,7 @@ export class ClaudeAgent extends BaseAgent {
 
     return new Promise((resolve) => {
       const cliSystemPrompt = this.systemPrompt + " No questions, no explanations.";
-      const cliPrompt = `${enhancedPrompt}. Output ONLY the HTML code, no questions or explanations.`;
+      const cliPrompt = `${enhancedPrompt}. Output ONLY the SFC code, no questions or explanations.`;
 
       const proc = spawn(
         "claude",
