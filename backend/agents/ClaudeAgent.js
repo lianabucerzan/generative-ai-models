@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { BaseAgent } from "./BaseAgent.js";
 import { estimateCost } from "../pricing.js";
-import { createFigmaService } from "../services/FigmaService.js";
+import { createMcpFigmaService } from "../services/McpFigmaService.js";
 
 // Project root: backend/agents/ -> backend/ -> project root
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -27,12 +27,14 @@ function claudeCLIAvailable() {
   }
 }
 
+const figmaService = await createMcpFigmaService();
+
 export class ClaudeAgent extends BaseAgent {
   constructor() {
     super("claude", "Anthropic Claude");
     this.client = null;
     this.useCLI = false;
-    this.figmaService = createFigmaService();
+    this.figmaService = figmaService;
 
     if (process.env.ANTHROPIC_API_KEY && Anthropic) {
       try {
@@ -52,7 +54,7 @@ export class ClaudeAgent extends BaseAgent {
       }
     }
 
-    console.log("Figma integration:", this.figmaService ? "enabled" : "disabled (no FIGMA_API_KEY)");
+    console.log("Figma:", this.figmaService ? "MCP ready" : "disabled (no FIGMA_API_KEY or MCP unavailable)");
   }
 
   async generate(prompt, modelId) {
@@ -106,30 +108,12 @@ export class ClaudeAgent extends BaseAgent {
 
       if (msg1.stop_reason === "tool_use") {
         const toolUse = msg1.content.find((b) => b.type === "tool_use");
-        const figmaData = this.figmaService
+        const figmaText = this.figmaService
           ? await this.figmaService.extract(toolUse.input.figma_url)
           : null;
 
-        const toolResultContent = figmaData?.imageBase64
-          ? [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: "image/png",
-                  data: figmaData.imageBase64,
-                },
-              },
-              {
-                type: "text",
-                text:
-                  `Colors: ${figmaData.tokens.colors.join(", ")}\n` +
-                  `Fonts: ${figmaData.tokens.fonts
-                    .map((f) => `${f.fontFamily} ${f.fontSize}px weight=${f.fontWeight}`)
-                    .join(", ")}\n` +
-                  `Dimensions: ${figmaData.tokens.dimensions.width}×${figmaData.tokens.dimensions.height}px`,
-              },
-            ]
+        const toolResultContent = figmaText
+          ? [{ type: "text", text: `Figma design data:\n${figmaText}\n\nGenerate an HTML component that faithfully replicates this design.` }]
           : [{ type: "text", text: "Figma data unavailable — generate from prompt only." }];
 
         finalMessage = await this.client.messages.create({
@@ -181,31 +165,9 @@ export class ClaudeAgent extends BaseAgent {
     }
   }
 
-  _buildFigmaPrompt(prompt, tokens) {
-    if (!tokens) return prompt;
-    const lines = ["Design tokens from Figma:"];
-    if (tokens.colors?.length)
-      lines.push(`Colors: ${tokens.colors.join(", ")}`);
-    if (tokens.gradients?.length)
-      lines.push(`Gradients: ${tokens.gradients.map(g =>
-        `${g.type}(${g.stops.map(s => `${s.color} at ${s.position}%`).join(", ")})`
-      ).join(" | ")}`);
-    if (tokens.fonts?.length)
-      lines.push(`Fonts: ${tokens.fonts.map(f => `${f.fontFamily} ${f.fontSize}px weight=${f.fontWeight}`).join(", ")}`);
-    if (tokens.dimensions?.width)
-      lines.push(`Dimensions: ${tokens.dimensions.width}×${tokens.dimensions.height}px`);
-    if (tokens.cornerRadius != null)
-      lines.push(`Border radius: ${tokens.cornerRadius}px`);
-    if (tokens.padding)
-      lines.push(`Padding: top=${tokens.padding.top}px right=${tokens.padding.right}px bottom=${tokens.padding.bottom}px left=${tokens.padding.left}px`);
-    if (tokens.strokes?.length)
-      lines.push(`Border: ${tokens.strokes.map(s => `${s.weight}px solid ${s.color}`).join(", ")}`);
-    if (tokens.effects?.length)
-      lines.push(`Shadows: ${tokens.effects.map(e =>
-        `${e.type === "INNER_SHADOW" ? "inset " : ""}${e.offsetX}px ${e.offsetY}px ${e.radius}px ${e.spread}px ${e.color}`
-      ).join(", ")}`);
-    lines.push("", prompt, "", "Replicate this design faithfully using the exact values above.");
-    return lines.join("\n");
+  _buildFigmaPrompt(prompt, figmaText) {
+    if (!figmaText) return prompt;
+    return `Figma design data:\n${figmaText}\n\nUser request: ${prompt}\n\nGenerate an HTML component that faithfully replicates this Figma design using the exact colors, typography, border-radius, shadows, and spacing shown above.`;
   }
 
   async _generateWithCLI(prompt, modelId) {
@@ -220,11 +182,11 @@ export class ClaudeAgent extends BaseAgent {
       ? prompt.replace(figmaUrl, "").trim() || "Replicate this design as an HTML component with Tailwind CSS"
       : prompt;
 
-    const figmaData = figmaUrl && this.figmaService
+    const figmaText = figmaUrl && this.figmaService
       ? await this.figmaService.extract(figmaUrl).catch(() => null)
       : null;
 
-    const enhancedPrompt = this._buildFigmaPrompt(cleanPrompt, figmaData?.tokens ?? null);
+    const enhancedPrompt = this._buildFigmaPrompt(cleanPrompt, figmaText);
 
     return new Promise((resolve) => {
       const cliSystemPrompt = this.systemPrompt + " No questions, no explanations.";
