@@ -1,4 +1,3 @@
-// backend/server.js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -10,7 +9,8 @@ import { AgentFactory } from "./agents/AgentFactory.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UI_COMPONENTS_DIR = resolve(__dirname, "../frontend/src/ui-components");
 
-dotenv.config();
+
+dotenv.config({ override: true });
 
 const app = express();
 const agentFactory = new AgentFactory();
