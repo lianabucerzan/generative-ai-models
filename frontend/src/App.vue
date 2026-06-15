@@ -1,16 +1,39 @@
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import axios from "axios";
 
+// ── Core state ────────────────────────────────────────────────────────────────
 const prompt = ref("");
 const models = ref([]);
 const results = ref({});
 const error = ref("");
+
+// ── Image state ───────────────────────────────────────────────────────────────
 const imageData = ref(null);
 const imageMimeType = ref(null);
 const imagePreview = ref(null);
 const fileInputRef = ref(null);
 
+// ── UI state ──────────────────────────────────────────────────────────────────
+const cardView = ref({});       // modelId -> 'preview' | 'code'
+const expandedCard = ref(null); // modelId | null
+const chosenModelId = ref(null);// refinement base
+const showHistory = ref(false);
+const history = ref([]);
+const copiedCard = ref(null);   // brief "Copied!" feedback
+const savedCard = ref(null);    // { id, path } — brief save confirmation
+
+// ── Presets ───────────────────────────────────────────────────────────────────
+const PRESETS = [
+  "Login form",
+  "Pricing table",
+  "Dashboard card",
+  "Navbar with dropdown",
+  "Settings page",
+  "User profile card",
+];
+
+// ── Image handling ────────────────────────────────────────────────────────────
 const loadImageFile = (file) => {
   if (!file || !file.type.startsWith("image/")) return;
   const reader = new FileReader();
@@ -52,27 +75,68 @@ const clearImage = () => {
   if (fileInputRef.value) fileInputRef.value.value = "";
 };
 
-onMounted(async () => {
-  try {
-    const response = await axios.get("http://localhost:3000/agents");
-    models.value = response.data.models;
-  } catch {
-    models.value = [
-      { id: "claude-opus-4-8",           displayName: "Claude Opus 4.8",   provider: "claude" },
-      { id: "claude-sonnet-4-6",         displayName: "Claude Sonnet 4.6", provider: "claude" },
-      { id: "claude-haiku-4-5-20251001", displayName: "Claude Haiku 4.5",  provider: "claude" },
-    ];
-  }
-});
+// ── History ───────────────────────────────────────────────────────────────────
+const HISTORY_KEY = "generative-ui-history";
 
+const loadHistory = () => {
+  try {
+    const stored = localStorage.getItem(HISTORY_KEY);
+    if (stored) history.value = JSON.parse(stored);
+  } catch {}
+};
+
+const saveToHistory = () => {
+  const completedResults = {};
+  for (const [id, r] of Object.entries(results.value)) {
+    if (r.output) completedResults[id] = { output: r.output, metrics: r.metrics };
+  }
+  if (!Object.keys(completedResults).length) return;
+  const entry = {
+    id: Date.now(),
+    prompt: prompt.value,
+    imagePreview: imagePreview.value,
+    timestamp: new Date().toLocaleString(),
+    results: completedResults,
+    chosenModelId: chosenModelId.value,
+  };
+  const updated = [entry, ...history.value].slice(0, 20);
+  history.value = updated;
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+};
+
+const restoreHistory = (entry) => {
+  results.value = Object.fromEntries(
+    Object.entries(entry.results).map(([id, r]) => [id, { ...r, loading: false, error: null }])
+  );
+  prompt.value = entry.prompt;
+  if (entry.imagePreview) imagePreview.value = entry.imagePreview;
+  chosenModelId.value = entry.chosenModelId ?? null;
+  showHistory.value = false;
+};
+
+const clearHistory = () => {
+  history.value = [];
+  localStorage.removeItem(HISTORY_KEY);
+};
+
+// ── Generation ────────────────────────────────────────────────────────────────
 const anyLoading = computed(() => Object.values(results.value).some((r) => r.loading));
 const hasContent = computed(() => prompt.value || imageData.value || Object.keys(results.value).length > 0);
+
+watch(anyLoading, (newVal, oldVal) => {
+  if (!newVal && oldVal) saveToHistory();
+});
 
 const clearAll = () => {
   prompt.value = "";
   error.value = "";
   results.value = {};
+  chosenModelId.value = null;
   clearImage();
+};
+
+const exitRefinement = () => {
+  chosenModelId.value = null;
 };
 
 const generateComponent = async () => {
@@ -82,38 +146,68 @@ const generateComponent = async () => {
   }
   error.value = "";
 
-  // Set all models to loading
-  const initial = {};
-  models.value.forEach((m) => {
-    initial[m.id] = { output: null, metrics: null, loading: true, error: null };
-  });
-  results.value = initial;
+  // In refinement mode inject the chosen output as context
+  let effectivePrompt = prompt.value;
+  if (chosenModelId.value && results.value[chosenModelId.value]?.output) {
+    const base = results.value[chosenModelId.value].output;
+    effectivePrompt = `Here is an existing HTML component:\n\`\`\`html\n${base}\n\`\`\`\n\nApply the following change: ${prompt.value}`;
+  }
 
-  // Fire all requests in parallel — each updates its slot as it resolves
+  const next = { ...results.value };
+  models.value.forEach((m) => {
+    next[m.id] = { output: null, metrics: null, loading: true, error: null };
+  });
+  results.value = next;
+
   models.value.forEach(async (model) => {
     try {
-      const payload = { prompt: prompt.value, model: model.id };
+      const payload = { prompt: effectivePrompt, model: model.id };
       if (imageData.value) {
         payload.image = { data: imageData.value, mimeType: imageMimeType.value };
       }
       const res = await axios.post("http://localhost:3000/generate", payload);
-      results.value[model.id] = {
-        output: res.data.output,
-        metrics: res.data.metrics,
-        loading: false,
-        error: null,
-      };
+      results.value[model.id] = { output: res.data.output, metrics: res.data.metrics, prompt: prompt.value, loading: false, error: null };
     } catch (err) {
-      results.value[model.id] = {
-        output: null,
-        metrics: null,
-        loading: false,
-        error: err.response?.data?.error || "Generation failed",
-      };
+      results.value[model.id] = { output: null, metrics: null, loading: false, error: err.response?.data?.error || "Generation failed" };
     }
   });
 };
 
+// ── Card actions ──────────────────────────────────────────────────────────────
+const getCardView = (modelId) => cardView.value[modelId] ?? "preview";
+const setCardView = (modelId, view) => { cardView.value[modelId] = view; };
+
+const useThis = (modelId) => {
+  chosenModelId.value = modelId;
+  prompt.value = "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+const copyCode = async (modelId) => {
+  const code = results.value[modelId]?.output;
+  if (!code) return;
+  await navigator.clipboard.writeText(code);
+  copiedCard.value = modelId;
+  setTimeout(() => { copiedCard.value = null; }, 1500);
+};
+
+const downloadToProject = async (modelId) => {
+  const result = results.value[modelId];
+  if (!result?.output) return;
+  try {
+    const res = await axios.post("http://localhost:3000/save-component", {
+      code: result.output,
+      modelId,
+      prompt: result.prompt || "",
+    });
+    savedCard.value = { id: modelId, path: res.data.path };
+    setTimeout(() => { savedCard.value = null; }, 3000);
+  } catch (err) {
+    alert(err.response?.data?.error || "Save failed");
+  }
+};
+
+// ── Misc ──────────────────────────────────────────────────────────────────────
 const buildPreviewDoc = (html) => `<!DOCTYPE html>
 <html>
 <head>
@@ -128,146 +222,314 @@ const isNullish = (val) => val === null || val === undefined || (typeof val === 
 const fmt = (val) => (!isNullish(val) ? val : "—");
 const fmtCost = (val) => (!isNullish(val) ? `~ $${val}` : "—");
 const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
+
+onMounted(async () => {
+  loadHistory();
+  try {
+    const response = await axios.get("http://localhost:3000/agents");
+    models.value = response.data.models;
+  } catch {
+    models.value = [
+      { id: "claude-opus-4-8",           displayName: "Claude Opus 4.8",   provider: "claude" },
+      { id: "claude-sonnet-4-6",         displayName: "Claude Sonnet 4.6", provider: "claude" },
+      { id: "claude-haiku-4-5-20251001", displayName: "Claude Haiku 4.5",  provider: "claude" },
+    ];
+  }
+});
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-100 p-8">
-    <div class="max-w-7xl mx-auto">
+  <div class="flex h-screen overflow-hidden bg-[#060a0f]">
 
-      <!-- Header + prompt bar -->
-      <div class="mb-8">
-        <h1 class="text-4xl font-bold text-gray-900 mb-5">Generative UI</h1>
+    <!-- ── Sidebar ─────────────────────────────────────────────── -->
+    <aside class="w-[300px] min-w-[300px] flex flex-col h-screen overflow-y-auto bg-[#0d1520] border-r border-[#1a2535]">
 
-        <div class="flex gap-3 items-start">
-          <div class="flex-1 flex flex-col gap-2">
-            <!-- Image preview -->
-            <div
-              v-if="imagePreview"
-              class="relative inline-flex"
+      <!-- Branding -->
+      <div class="px-5 py-4 border-b border-[#1a2535]">
+        <div class="flex items-center gap-2.5 mb-1">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm shrink-0 bg-gradient-to-br from-[#0891b2] to-[#06b6d4]">✦</div>
+          <span class="text-[#f1f5f9] font-bold text-base tracking-tight">Generative UI</span>
+        </div>
+        <p class="text-[10px] text-[#94a3b8] uppercase tracking-widest ml-[38px]">Model Arena</p>
+      </div>
+
+      <!-- Body -->
+      <div class="flex-1 flex flex-col gap-3 p-4">
+
+        <!-- Refinement banner -->
+        <div v-if="chosenModelId" class="flex items-center gap-2 px-3 py-2 bg-[#0a1a20] border border-[#164e63] rounded-lg text-xs text-[#67e8f9]">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#22d3ee] shrink-0"></span>
+          <span>Refining <strong>{{ models.find(m => m.id === chosenModelId)?.displayName }}</strong></span>
+          <button @click="exitRefinement" class="ml-auto text-[10px] font-medium text-[#0891b2] hover:text-[#22d3ee]">Exit ×</button>
+        </div>
+
+        <!-- Image preview -->
+        <div v-if="imagePreview" class="relative inline-flex">
+          <img :src="imagePreview" class="max-h-16 rounded-lg border border-[#1e293b] object-contain" />
+          <button @click="clearImage" aria-label="Remove image" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#0d1520] border border-[#1e293b] rounded-full text-[#64748b] hover:text-[#f87171] shadow text-xs flex items-center justify-center">✕</button>
+        </div>
+
+        <!-- Prompt -->
+        <div>
+          <p class="text-[10px] text-[#94a3b8] uppercase tracking-widest mb-2">Prompt</p>
+          <textarea
+            v-model="prompt"
+            @paste="handlePaste"
+            :placeholder="chosenModelId ? 'Describe the change to apply…' : imagePreview ? 'Add instructions (optional)' : 'Describe a component, or paste / drop a screenshot…'"
+            aria-label="Prompt"
+            class="w-full px-3 py-2.5 bg-[#0a1520] border border-[#1e293b] rounded-lg text-[#e2e8f0] text-xs placeholder-[#94a3b8] resize-none focus:outline-none focus:border-[#0891b2] transition h-18"
+          />
+        </div>
+
+        <!-- Presets -->
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="preset in PRESETS"
+            :key="preset"
+            @click="prompt = preset"
+            class="px-2.5 py-1 text-[10px] bg-[#0a1520] border border-[#1e293b] rounded-full text-[#94a3b8] hover:border-[#0891b2] hover:text-[#22d3ee] transition"
+          >{{ preset }}</button>
+        </div>
+
+        <!-- Drop zone -->
+        <div
+          class="border border-dashed border-[#1e293b] rounded-lg px-3 py-2.5 text-[10px] text-[#94a3b8] text-center cursor-pointer hover:border-[#0891b2] hover:text-[#22d3ee] transition"
+          @dragover.prevent
+          @drop.prevent="handleDrop"
+          @click="fileInputRef.click()"
+          @keydown.enter.prevent="fileInputRef.click()"
+          @keydown.space.prevent="fileInputRef.click()"
+          tabindex="0"
+          role="button"
+          aria-label="Upload image"
+        >↑ Drop an image or click to upload</div>
+        <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileInput" />
+
+        <!-- Generate -->
+        <button
+          @click="generateComponent"
+          :disabled="anyLoading"
+          class="w-full py-2.5 bg-[#0891b2] hover:bg-[#0e7490] disabled:bg-[#1e293b] disabled:text-[#94a3b8] text-white font-semibold text-sm rounded-lg transition"
+        >{{ anyLoading ? 'Generating…' : chosenModelId ? 'Refine' : 'Generate' }}</button>
+
+        <!-- Clear -->
+        <button
+          v-if="hasContent"
+          @click="clearAll"
+          :disabled="anyLoading"
+          class="w-full py-2 bg-transparent border border-[#1e293b] text-[#94a3b8] hover:text-[#94a3b8] hover:border-[#1e3a4a] disabled:opacity-40 text-xs rounded-lg transition"
+        >Clear</button>
+
+        <p v-if="error" class="text-xs text-[#f87171]">{{ error }}</p>
+
+        <!-- History -->
+        <div class="mt-auto pt-3 flex flex-col gap-2">
+          <button
+            @click="showHistory = !showHistory"
+            class="w-full flex items-center justify-between px-3 py-2 bg-[#0a1520] border border-[#1e293b] rounded-lg text-xs text-[#94a3b8] hover:text-[#94a3b8] hover:border-[#1e3a4a] transition"
+          >
+            <span>History</span>
+            <span v-if="history.length" class="text-[9px] px-2 py-0.5 rounded-full bg-[#0f2a35] text-[#22d3ee]">{{ history.length }}</span>
+          </button>
+
+          <div v-if="showHistory && history.length" class="border border-[#1a2535] rounded-lg overflow-hidden">
+            <button
+              v-for="entry in history"
+              :key="entry.id"
+              @click="restoreHistory(entry)"
+              class="w-full flex items-center gap-2.5 px-3 py-2 border-b border-[#1a2535] last:border-0 text-left hover:bg-[#0a1520] transition"
             >
-              <img :src="imagePreview" class="max-h-40 rounded-xl border border-gray-200 object-contain" />
-              <button
-                @click="clearImage"
-                class="absolute -top-2 -right-2 w-6 h-6 bg-white border border-gray-300 rounded-full text-gray-500 hover:text-red-500 shadow text-xs font-bold flex items-center justify-center"
-              >✕</button>
-            </div>
-
-            <!-- Textarea -->
-            <textarea
-              v-model="prompt"
-              @paste="handlePaste"
-              :placeholder="imagePreview ? 'Add instructions (optional)' : 'Describe a UI component — or paste a Figma frame URL anywhere in your prompt'"
-              class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white shadow-sm resize-none h-16 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-
-            <!-- Drop zone (hidden file input) -->
-            <div
-              class="border-2 border-dashed border-gray-200 rounded-xl px-4 py-2 text-xs text-gray-400 text-center cursor-pointer hover:border-blue-300 hover:text-blue-400 transition"
-              @dragover.prevent
-              @drop.prevent="handleDrop"
-              @click="fileInputRef.click()"
-            >
-              Drop an image here or click to upload
-            </div>
-            <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleFileInput" />
+              <img v-if="entry.imagePreview" :src="entry.imagePreview" class="w-7 h-7 rounded object-cover shrink-0 border border-[#1e293b]" />
+              <div v-else class="w-7 h-7 rounded bg-[#0f2230] border border-[#1e293b] shrink-0 flex items-center justify-center">
+                <svg class="w-3 h-3" fill="none" stroke="#94a3b8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-[10px] text-[#64748b] truncate">{{ entry.prompt || '(image only)' }}</p>
+                <p class="text-[9px] text-[#94a3b8]">{{ entry.timestamp }} · {{ Object.keys(entry.results).length }} models</p>
+              </div>
+            </button>
+            <button @click="clearHistory" class="w-full text-[10px] text-[#f87171] py-1.5 hover:bg-[#0a1520] transition">Clear all</button>
           </div>
 
-          <div class="flex flex-col gap-2 self-end">
-            <button
-              @click="generateComponent"
-              :disabled="anyLoading"
-              class="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold rounded-xl transition"
-            >
-              {{ anyLoading ? "Generating…" : "Generate" }}
-            </button>
-            <button
-              v-if="hasContent"
-              @click="clearAll"
-              :disabled="anyLoading"
-              class="px-8 py-2 bg-white hover:bg-gray-50 disabled:opacity-40 border border-gray-300 text-gray-600 font-medium rounded-xl transition text-sm"
-            >
-              Clear
-            </button>
+          <div v-else-if="showHistory && !history.length" class="border border-[#1a2535] rounded-lg text-[10px] text-[#94a3b8] text-center py-4">
+            No history yet.
           </div>
         </div>
 
-        <p v-if="error" class="mt-2 text-sm text-red-600">{{ error }}</p>
       </div>
+    </aside>
 
-      <!-- 2×2 model grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- ── Main ────────────────────────────────────────────────── -->
+    <main class="flex-1 overflow-y-auto p-5 bg-[#060a0f]">
+      <p class="text-[10px] text-[#94a3b8] uppercase tracking-widest mb-3">Model Results</p>
+      <div class="grid grid-cols-2 gap-4">
         <div
           v-for="model in models"
           :key="model.id"
-          class="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col"
+          class="bg-[#0d1520] rounded-xl overflow-hidden flex flex-col transition"
+          :class="chosenModelId === model.id
+            ? 'border border-[#0891b2] shadow-[0_0_0_1px_#0891b2]'
+            : 'border border-[#1a2535]'"
         >
           <!-- Card header -->
-          <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-            <span class="font-semibold text-gray-900 text-sm">{{ model.displayName }}</span>
-            <span v-if="results[model.id]?.loading" class="text-xs text-blue-500 animate-pulse">Generating…</span>
-            <span v-else-if="results[model.id]?.output" class="text-xs text-green-500">Ready</span>
-            <span v-else-if="results[model.id]?.error" class="text-xs text-red-400">Error</span>
+          <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-[#1a2535]">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-[#e2e8f0]">{{ model.displayName }}</span>
+              <span
+                v-if="chosenModelId === model.id"
+                class="text-[9px] px-1.5 py-0.5 bg-[#0e3040] border border-[#0891b2] text-[#22d3ee] rounded font-medium"
+              >base</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span v-if="results[model.id]?.loading" class="text-[10px] text-[#22d3ee] animate-pulse">Generating…</span>
+              <span v-else-if="results[model.id]?.output" class="text-[10px] text-[#4ade80] bg-[#052010] px-2 py-0.5 rounded-full">● Ready</span>
+              <span v-else-if="results[model.id]?.error" class="text-[10px] text-[#f87171]">Error</span>
+              <template v-if="results[model.id]?.output">
+                <button @click="copyCode(model.id)" class="text-[10px] px-2 py-1 rounded bg-[#0a1520] border border-[#1e293b] text-[#64748b] hover:text-[#94a3b8] transition">
+                  {{ copiedCard === model.id ? 'Copied!' : 'Copy' }}
+                </button>
+                <button @click="downloadToProject(model.id)" class="text-[10px] px-2 py-1 rounded bg-[#0a1520] border border-[#1e293b] text-[#64748b] hover:text-[#94a3b8] transition">
+                  {{ savedCard?.id === model.id ? '✓ Saved' : '↓ Save' }}
+                </button>
+                <button @click="useThis(model.id)" :disabled="chosenModelId === model.id" class="text-[10px] px-2 py-1 rounded bg-[#0e3040] border border-[#0891b2] text-[#22d3ee] hover:bg-[#0891b2] hover:text-white transition">
+                  {{ chosenModelId === model.id ? 'Chosen' : 'Use this' }}
+                </button>
+                <button @click="expandedCard = model.id" aria-label="Expand to full screen" class="text-[10px] px-2 py-1 rounded bg-[#0a1520] border border-[#1e293b] text-[#64748b] hover:text-[#94a3b8] transition">⤢</button>
+              </template>
+            </div>
           </div>
 
-          <!-- Preview -->
-          <div class="flex-1 min-h-64 p-5">
-            <!-- Loading -->
-            <div v-if="results[model.id]?.loading" class="h-64 flex items-center justify-center text-gray-300">
-              <svg class="animate-spin h-8 w-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          <!-- Save confirmation -->
+          <div v-if="savedCard?.id === model.id" class="px-3.5 py-1.5 bg-[#052010] border-b border-[#164e63] text-[10px] text-[#4ade80] font-mono">
+            ✓ {{ savedCard.path }}
+          </div>
+
+          <!-- Tabs -->
+          <div v-if="results[model.id]?.output" class="flex bg-[#060a0f] border-b border-[#1a2535]">
+            <button
+              @click="setCardView(model.id, 'preview')"
+              class="px-3.5 py-1.5 text-xs font-medium transition border-b-2"
+              :class="getCardView(model.id) === 'preview'
+                ? 'text-[#22d3ee] border-[#0891b2]'
+                : 'text-[#94a3b8] border-transparent hover:text-[#64748b]'"
+            >Preview</button>
+            <button
+              @click="setCardView(model.id, 'code')"
+              class="px-3.5 py-1.5 text-xs font-medium transition border-b-2"
+              :class="getCardView(model.id) === 'code'
+                ? 'text-[#22d3ee] border-[#0891b2]'
+                : 'text-[#94a3b8] border-transparent hover:text-[#64748b]'"
+            >Code</button>
+          </div>
+
+          <!-- Content -->
+          <div class="flex-1 min-h-75">
+            <div v-if="results[model.id]?.loading" class="flex flex-col items-center justify-center gap-2 h-full min-h-[300px]">
+              <svg class="animate-spin text-[#0891b2] w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
               </svg>
+              <span class="text-xs text-[#94a3b8]">Generating…</span>
             </div>
-            <!-- Output -->
+            <!-- allow-same-origin needed for Tailwind CDN in srcdoc; output is model-generated, not user-supplied -->
             <iframe
-              v-else-if="results[model.id]?.output"
+              v-else-if="results[model.id]?.output && getCardView(model.id) === 'preview'"
               :srcdoc="buildPreviewDoc(results[model.id].output)"
               sandbox="allow-scripts allow-same-origin"
-              class="w-full h-64 border-0"
+              class="w-full border-0 h-full min-h-[300px]"
             />
-            <!-- Error -->
-            <div v-else-if="results[model.id]?.error" class="h-64 flex items-center justify-center text-sm text-red-400">
+            <div
+              v-else-if="results[model.id]?.output && getCardView(model.id) === 'code'"
+              class="overflow-auto bg-[#040608] p-4 h-full min-h-[300px]"
+            >
+              <pre class="text-xs text-[#4ade80] whitespace-pre-wrap break-words font-mono leading-relaxed">{{ results[model.id].output }}</pre>
+            </div>
+            <div v-else-if="results[model.id]?.error" class="flex items-center justify-center p-4 text-center text-xs text-[#f87171] h-full min-h-[300px]">
               {{ results[model.id].error }}
             </div>
-            <!-- Empty -->
-            <div v-else class="h-64 flex items-center justify-center text-gray-300 text-sm">
+            <div v-else class="flex items-center justify-center text-xs text-[#94a3b8] h-full min-h-[300px]">
               Preview will appear here
             </div>
           </div>
 
           <!-- Metrics bar -->
-          <div
-            v-if="results[model.id]?.metrics"
-            class="bg-slate-900 px-4 py-2 font-mono text-xs flex items-center gap-4 flex-wrap"
-          >
+          <div v-if="results[model.id]?.metrics" class="flex items-center gap-3 flex-wrap px-3.5 py-1.5 font-mono text-[10px] bg-[#060a0f] border-t border-[#1a2535]">
             <div class="flex items-center gap-1.5">
-              <span class="text-slate-500 uppercase tracking-widest text-[9px]">Tokens</span>
-              <span class="text-cyan-400">↑ {{ fmt(results[model.id].metrics.inputTokens) }}</span>
-              <span class="text-violet-400">↓ {{ fmt(results[model.id].metrics.outputTokens) }}</span>
+              <span class="text-[8px] text-[#94a3b8] uppercase tracking-widest">Tokens</span>
+              <span class="text-[#22d3ee]">↑ {{ fmt(results[model.id].metrics.inputTokens) }}</span>
+              <span class="text-[#818cf8]">↓ {{ fmt(results[model.id].metrics.outputTokens) }}</span>
             </div>
-            <div class="w-px h-3 bg-slate-700"></div>
+            <div class="w-px h-3 bg-[#1a2535]"></div>
             <div class="flex items-center gap-1.5">
-              <span class="text-slate-500 uppercase tracking-widest text-[9px]">Latency</span>
-              <span class="text-orange-400">{{ fmtMs(results[model.id].metrics.latencyMs) }}</span>
+              <span class="text-[8px] text-[#94a3b8] uppercase tracking-widest">Latency</span>
+              <span class="text-[#fb923c]">{{ fmtMs(results[model.id].metrics.latencyMs) }}</span>
             </div>
-            <div class="w-px h-3 bg-slate-700"></div>
+            <div class="w-px h-3 bg-[#1a2535]"></div>
             <div class="flex items-center gap-1.5">
-              <span class="text-slate-500 uppercase tracking-widest text-[9px]">Cost</span>
-              <span class="text-green-400">{{ fmtCost(results[model.id].metrics.estimatedCostUsd) }}</span>
+              <span class="text-[8px] text-[#94a3b8] uppercase tracking-widest">Cost</span>
+              <span class="text-[#4ade80]">{{ fmtCost(results[model.id].metrics.estimatedCostUsd) }}</span>
             </div>
           </div>
         </div>
       </div>
-
-    </div>
+    </main>
   </div>
-</template>
 
-<style scoped>
-textarea {
-  transition: all 0.2s ease;
-}
-textarea:focus {
-  transform: scale(1.01);
-}
-</style>
+  <!-- ── Full-screen modal ──────────────────────────────────── -->
+  <teleport to="body">
+    <div
+      v-if="expandedCard"
+      class="fixed inset-0 z-50 bg-black/90 flex flex-col"
+      @click.self="expandedCard = null"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="models.find(m => m.id === expandedCard)?.displayName + ' — expanded view'"
+      @keydown.escape="expandedCard = null"
+      tabindex="-1"
+    >
+      <div class="flex items-center justify-between px-6 py-3 bg-[#0d1520] border-b border-[#1a2535] shrink-0">
+        <div class="flex items-center gap-3">
+          <span class="font-semibold text-sm text-[#e2e8f0]">{{ models.find(m => m.id === expandedCard)?.displayName }}</span>
+          <div class="flex text-xs">
+            <button
+              @click="setCardView(expandedCard, 'preview')"
+              class="px-3 py-1.5 rounded-l border border-[#1e293b] transition"
+              :class="getCardView(expandedCard) === 'preview'
+                ? 'bg-[#0891b2] text-white border-[#0891b2]'
+                : 'bg-[#0a1520] text-[#64748b] hover:text-[#94a3b8]'"
+            >Preview</button>
+            <button
+              @click="setCardView(expandedCard, 'code')"
+              class="px-3 py-1.5 rounded-r border border-l-0 border-[#1e293b] transition"
+              :class="getCardView(expandedCard) === 'code'
+                ? 'bg-[#0891b2] text-white border-[#0891b2]'
+                : 'bg-[#0a1520] text-[#64748b] hover:text-[#94a3b8]'"
+            >Code</button>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="copyCode(expandedCard)" class="text-xs px-3 py-1.5 rounded bg-[#0a1520] border border-[#1e293b] text-[#64748b] hover:text-[#94a3b8] transition">
+            {{ copiedCard === expandedCard ? 'Copied!' : 'Copy' }}
+          </button>
+          <button @click="downloadToProject(expandedCard)" class="text-xs px-3 py-1.5 rounded bg-[#0a1520] border border-[#1e293b] text-[#64748b] hover:text-[#94a3b8] transition">
+            {{ savedCard?.id === expandedCard ? '✓ Saved' : '↓ Save' }}
+          </button>
+          <button @click="() => { useThis(expandedCard); expandedCard = null; }" class="text-xs px-3 py-1.5 rounded bg-[#0e3040] border border-[#0891b2] text-[#22d3ee] hover:bg-[#0891b2] hover:text-white transition">Use this</button>
+          <button @click="expandedCard = null" class="text-xs px-3 py-1.5 rounded bg-[#0a1520] border border-[#1e293b] text-[#64748b] hover:text-[#94a3b8] transition">✕ Close</button>
+        </div>
+      </div>
+      <div class="flex-1 overflow-hidden">
+        <!-- allow-same-origin needed for Tailwind CDN in srcdoc; output is model-generated, not user-supplied -->
+        <iframe
+          v-if="getCardView(expandedCard) === 'preview'"
+          :srcdoc="buildPreviewDoc(results[expandedCard]?.output)"
+          sandbox="allow-scripts allow-same-origin"
+          class="w-full h-full border-0 bg-white"
+        />
+        <div v-else class="h-full overflow-auto bg-[#040608] p-6">
+          <pre class="text-sm text-[#4ade80] whitespace-pre-wrap break-words font-mono leading-relaxed">{{ results[expandedCard]?.output }}</pre>
+        </div>
+      </div>
+    </div>
+  </teleport>
+</template>

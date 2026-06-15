@@ -1,7 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { writeFile, mkdir } from "fs/promises";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import { AgentFactory } from "./agents/AgentFactory.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const UI_COMPONENTS_DIR = resolve(__dirname, "../frontend/src/ui-components");
+
 
 dotenv.config({ override: true });
 
@@ -45,6 +52,27 @@ app.post("/generate", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message || "Generation failed" });
+  }
+});
+
+app.post("/save-component", async (req, res) => {
+  try {
+    const { code, modelId, prompt } = req.body;
+    if (!code) return res.status(400).json({ error: "code is required" });
+
+    await mkdir(UI_COMPONENTS_DIR, { recursive: true });
+
+    const baseName = prompt
+      ? prompt.replace(/[^a-zA-Z0-9\s]/g, "").trim().split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("").slice(0, 40) || "Component"
+      : "Component";
+    const tier = modelId.replace(/^claude-/, "").replace(/-[\d.]+.*$/, ""); // opus | sonnet | haiku
+    const filename = `${baseName}-${tier}.vue`;
+
+    await writeFile(resolve(UI_COMPONENTS_DIR, filename), code, "utf-8");
+    res.json({ filename, path: `src/ui-components/${filename}` });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message || "Save failed" });
   }
 });
 
