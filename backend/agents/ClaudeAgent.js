@@ -27,14 +27,20 @@ function claudeCLIAvailable() {
   }
 }
 
-const figmaService = await createMcpFigmaService();
+let _figmaService = null;
+
+async function getFigmaService() {
+  if (!_figmaService) {
+    _figmaService = await createMcpFigmaService().catch(() => null);
+  }
+  return _figmaService;
+}
 
 export class ClaudeAgent extends BaseAgent {
   constructor() {
     super("claude", "Anthropic Claude");
     this.client = null;
     this.useCLI = false;
-    this.figmaService = figmaService;
 
     if (process.env.ANTHROPIC_API_KEY && Anthropic) {
       try {
@@ -54,7 +60,7 @@ export class ClaudeAgent extends BaseAgent {
       }
     }
 
-    console.log("Figma:", this.figmaService ? "MCP ready" : "disabled (no FIGMA_API_KEY or MCP unavailable)");
+    getFigmaService().then((svc) => console.log("Figma:", svc ? "MCP ready" : "disabled (no FIGMA_API_KEY or MCP unavailable)"));
   }
 
   async generate(prompt, modelId, image = null) {
@@ -118,8 +124,9 @@ export class ClaudeAgent extends BaseAgent {
 
       if (msg1.stop_reason === "tool_use") {
         const toolUse = msg1.content.find((b) => b.type === "tool_use");
-        const figmaText = this.figmaService
-          ? await this.figmaService.extract(toolUse.input.figma_url)
+        const figmaSvc = await getFigmaService();
+        const figmaText = figmaSvc
+          ? await figmaSvc.extract(toolUse.input.figma_url)
           : null;
 
         const toolResultContent = figmaText
@@ -192,8 +199,9 @@ export class ClaudeAgent extends BaseAgent {
       ? prompt.replace(figmaUrl, "").trim() || "Replicate this design as an HTML component with Tailwind CSS"
       : prompt;
 
-    const figmaText = figmaUrl && this.figmaService
-      ? await this.figmaService.extract(figmaUrl).catch(() => null)
+    const figmaSvc = figmaUrl ? await getFigmaService() : null;
+    const figmaText = figmaSvc
+      ? await figmaSvc.extract(figmaUrl).catch(() => null)
       : null;
 
     const enhancedPrompt = this._buildFigmaPrompt(cleanPrompt, figmaText);
