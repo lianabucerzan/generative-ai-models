@@ -3,7 +3,7 @@ import { ClaudeAgent } from "./ClaudeAgent.js";
 
 export class AgentFactory {
   static MODEL_CATALOG = [
-    { id: "claude-opus-4-7",           displayName: "Claude Opus 4.7",   provider: "claude" },
+    { id: "claude-opus-4-8",           displayName: "Claude Opus 4.8",   provider: "claude" },
     { id: "claude-sonnet-4-6",         displayName: "Claude Sonnet 4.6", provider: "claude" },
     { id: "claude-haiku-4-5-20251001", displayName: "Claude Haiku 4.5",  provider: "claude" },
   ];
@@ -24,7 +24,7 @@ export class AgentFactory {
     return AgentFactory.MODEL_CATALOG;
   }
 
-  // Returns "claude" | "ollama" | null
+  // Returns "claude" | null
   getProviderForModel(modelId) {
     return AgentFactory.MODEL_CATALOG.find((m) => m.id === modelId)?.provider ?? null;
   }
