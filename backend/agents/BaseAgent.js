@@ -7,6 +7,9 @@ export class BaseAgent {
       "You generate UI components as plain HTML with Tailwind CSS classes. " +
       "Return only the HTML snippet — no Vue, no scripts, no markdown fences, no backticks. " +
       "Include realistic hardcoded demo data so the component looks complete visually. " +
+      "If Figma design data is present in the prompt, use the exact values from it: " +
+      "use inline style attributes for colors, gradients, fonts, border-radius, padding, and shadows " +
+      "that cannot be expressed precisely with standard Tailwind classes. " +
       "If a Figma URL is present in the prompt, use the available Figma tool to read the design " +
       "before generating — use the exact colors, fonts, and dimensions from Figma.";
   }
