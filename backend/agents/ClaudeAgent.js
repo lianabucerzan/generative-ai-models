@@ -124,7 +124,7 @@ export class ClaudeAgent extends BaseAgent {
         messagePayload.temperature = temperature;
       }
 
-      
+      const msg1 = await this.client.messages.create(messagePayload);
       let finalMessage = msg1;
 
       if (msg1.stop_reason === "tool_use") {
@@ -176,6 +176,7 @@ export class ClaudeAgent extends BaseAgent {
       };
     } catch (error) {
       console.warn("Claude Agent: API call failed, falling back to CLI or mock");
+      console.error("Claude Agent error details:", error?.status, error?.message, error?.error);
       if (this.useCLI) {
         return this._generateWithCLI(prompt, modelId);
       }
