@@ -63,15 +63,15 @@ export class ClaudeAgent extends BaseAgent {
     getFigmaService().then((svc) => console.log("Figma:", svc ? "MCP ready" : "disabled (no FIGMA_API_KEY or MCP unavailable)"));
   }
 
-  async generate(prompt, modelId, image = null) {
+  async generate(prompt, modelId, image = null, temperature = null) {
     if (this.client) {
-      return this._generateWithAPI(prompt, modelId, image);
+      return this._generateWithAPI(prompt, modelId, image, temperature);
     }
     if (this.useCLI) {
       if (image) {
         throw new Error("Image input requires an API key — add ANTHROPIC_API_KEY to backend/.env");
       }
-      return this._generateWithCLI(prompt, modelId);
+      return this._generateWithCLI(prompt, modelId, temperature);
     }
     const start = Date.now();
     return {
@@ -80,7 +80,7 @@ export class ClaudeAgent extends BaseAgent {
     };
   }
 
-  async _generateWithAPI(prompt, modelId, image = null) {
+  async _generateWithAPI(prompt, modelId, image = null, temperature = null) {
     const start = Date.now();
 
     const tools = [
@@ -112,14 +112,19 @@ export class ClaudeAgent extends BaseAgent {
     const messages = [{ role: "user", content: userContent }];
 
     try {
-      const msg1 = await this.client.messages.create({
+      const messagePayload = {
         model: modelId,
         max_tokens: 4096,
         system: this.systemPrompt,
         tools,
         messages,
-      });
+      }
+      
+      if (typeof temperature === "number") {
+        messagePayload.temperature = temperature;
+      }
 
+      
       let finalMessage = msg1;
 
       if (msg1.stop_reason === "tool_use") {
@@ -187,7 +192,7 @@ export class ClaudeAgent extends BaseAgent {
     return `Figma design data:\n${figmaText}\n\nUser request: ${prompt}\n\nGenerate an HTML component that faithfully replicates this Figma design using the exact colors, typography, border-radius, shadows, and spacing shown above.`;
   }
 
-  async _generateWithCLI(prompt, modelId) {
+  async _generateWithCLI(prompt, modelId, temperature = null) {
     const start = Date.now();
     const env = { ...process.env };
     delete env.CLAUDECODE;

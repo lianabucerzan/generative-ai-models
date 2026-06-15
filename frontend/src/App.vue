@@ -6,6 +6,7 @@ const prompt = ref("");
 const models = ref([]);
 const results = ref({});
 const error = ref("");
+const temperature = ref(0);
 
 const imageData = ref(null);
 const imageMimeType = ref(null);
@@ -62,7 +63,6 @@ onMounted(async () => {
       { id: "claude-opus-4-7",           displayName: "Claude Opus 4.7",   provider: "claude" },
       { id: "claude-sonnet-4-6",         displayName: "Claude Sonnet 4.6", provider: "claude" },
       { id: "claude-haiku-4-5-20251001", displayName: "Claude Haiku 4.5",  provider: "claude" },
-      { id: "gemini-2.5-pro",            displayName: "Gemini 2.5 Pro",    provider: "gemini" },
     ];
   }
 });
@@ -94,7 +94,7 @@ const generateComponent = async () => {
   // Fire all requests in parallel — each updates its slot as it resolves
   models.value.forEach(async (model) => {
     try {
-      const payload = { prompt: prompt.value, model: model.id };
+      const payload = { prompt: prompt.value, model: model.id, temperature: temperature.value };
       if (imageData.value) {
         payload.image = { data: imageData.value, mimeType: imageMimeType.value };
       }
@@ -161,6 +161,23 @@ const fmtMs = (val) => (!isNullish(val) ? `${val.toLocaleString()} ms` : "—");
               :placeholder="imagePreview ? 'Add instructions (optional)' : 'Describe a UI component — or paste a Figma frame URL anywhere in your prompt'"
               class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white shadow-sm resize-none h-16 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+
+            <!-- Temperature control -->
+            <div class="flex flex-col gap-2 mt-3 text-sm text-gray-700">
+              <label class="flex items-center justify-between gap-3">
+                <span>Temperature</span>
+                <span class="font-semibold">{{ temperature.toFixed(2) }}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                v-model.number="temperature"
+                class="w-full"
+              />
+              <p class="text-xs text-gray-500">Lower values make output more deterministic; higher values make it more creative.</p>
+            </div>
 
             <!-- Drop zone (hidden file input) -->
             <div
