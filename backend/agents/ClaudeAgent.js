@@ -46,15 +46,15 @@ export class ClaudeAgent extends BaseAgent {
     }
   }
 
-  async generate(prompt, modelId, image = null, temperature = null) {
+  async generate(prompt, modelId, image = null) {
     if (this.client) {
-      return this._generateWithAPI(prompt, modelId, image, temperature);
+      return this._generateWithAPI(prompt, modelId, image);
     }
     if (this.useCLI) {
       if (image) {
         throw new Error("Image input requires an API key — add ANTHROPIC_API_KEY to backend/.env");
       }
-      return this._generateWithCLI(prompt, modelId, temperature);
+      return this._generateWithCLI(prompt, modelId);
     }
     const start = Date.now();
     return {
@@ -63,7 +63,7 @@ export class ClaudeAgent extends BaseAgent {
     };
   }
 
-  async _generateWithAPI(prompt, modelId, image = null, temperature = null) {
+  async _generateWithAPI(prompt, modelId, image = null) {
     const start = Date.now();
     try {
       const content = [];
@@ -72,17 +72,12 @@ export class ClaudeAgent extends BaseAgent {
       }
       content.push({ type: "text", text: prompt || "Recreate this UI as plain HTML with Tailwind CSS classes." });
 
-      const messagePayload = {
+      const message = await this.client.messages.create({
         model: modelId,
         max_tokens: 4096,
         system: this.systemPrompt,
         messages: [{ role: "user", content }],
-      };
-      if (typeof temperature === "number") {
-        messagePayload.temperature = temperature;
-      }
-
-      const message = await this.client.messages.create(messagePayload);
+      });
       const latencyMs = Date.now() - start;
       const inputTokens = message.usage.input_tokens;
       const outputTokens = message.usage.output_tokens;
@@ -110,7 +105,7 @@ export class ClaudeAgent extends BaseAgent {
     }
   }
 
-  _generateWithCLI(prompt, modelId, temperature = null) {
+  _generateWithCLI(prompt, modelId) {
     const start = Date.now();
     // Strip CLAUDECODE so the subprocess isn't blocked by the nested-session guard
     const env = { ...process.env };
