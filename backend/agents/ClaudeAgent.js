@@ -63,15 +63,15 @@ export class ClaudeAgent extends BaseAgent {
     getFigmaService().then((svc) => console.log("Figma:", svc ? "MCP ready" : "disabled (no FIGMA_API_KEY or MCP unavailable)"));
   }
 
-  async generate(prompt, modelId, image = null, temperature = null) {
+  async generate(prompt, modelId, image = null) {
     if (this.client) {
-      return this._generateWithAPI(prompt, modelId, image, temperature);
+      return this._generateWithAPI(prompt, modelId, image);
     }
     if (this.useCLI) {
       if (image) {
         throw new Error("Image input requires an API key — add ANTHROPIC_API_KEY to backend/.env");
       }
-      return this._generateWithCLI(prompt, modelId, temperature);
+      return this._generateWithCLI(prompt, modelId);
     }
     const start = Date.now();
     return {
@@ -80,7 +80,7 @@ export class ClaudeAgent extends BaseAgent {
     };
   }
 
-  async _generateWithAPI(prompt, modelId, image = null, temperature = null) {
+  async _generateWithAPI(prompt, modelId, image = null) {
     const start = Date.now();
 
     const tools = [
@@ -118,11 +118,7 @@ export class ClaudeAgent extends BaseAgent {
         system: this.systemPrompt,
         tools,
         messages,
-      }
-      
-      if (typeof temperature === "number") {
-        messagePayload.temperature = temperature;
-      }
+      };
 
       const msg1 = await this.client.messages.create(messagePayload);
       let finalMessage = msg1;
@@ -193,7 +189,7 @@ export class ClaudeAgent extends BaseAgent {
     return `Figma design data:\n${figmaText}\n\nUser request: ${prompt}\n\nGenerate an HTML component that faithfully replicates this Figma design using the exact colors, typography, border-radius, shadows, and spacing shown above.`;
   }
 
-  async _generateWithCLI(prompt, modelId, temperature = null) {
+  async _generateWithCLI(prompt, modelId) {
     const start = Date.now();
     const env = { ...process.env };
     delete env.CLAUDECODE;

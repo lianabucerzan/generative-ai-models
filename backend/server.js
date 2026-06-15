@@ -17,19 +17,13 @@ app.get("/agents", (req, res) => {
 
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt, model, image, temperature } = req.body;
+    const { prompt, model, image } = req.body;
 
     if (!model) {
       return res.status(400).json({ error: "model is required" });
     }
     if (!prompt && !image) {
       return res.status(400).json({ error: "prompt or image is required" });
-    }
-    if (temperature != null && typeof temperature !== "number") {
-      return res.status(400).json({ error: "temperature must be a number" });
-    }
-    if (temperature != null && (temperature < 0 || temperature > 1)) {
-      return res.status(400).json({ error: "temperature must be between 0 and 1" });
     }
 
     const provider = agentFactory.getProviderForModel(model);
@@ -45,7 +39,7 @@ app.post("/generate", async (req, res) => {
         error: `Agent for provider '${provider}' is not initialized`,
       });
     }
-    const { output, metrics } = await agent.generate(prompt, model, image ?? null, temperature);
+    const { output, metrics } = await agent.generate(prompt, model, image ?? null);
 
     res.json({ output, metrics });
   } catch (error) {
