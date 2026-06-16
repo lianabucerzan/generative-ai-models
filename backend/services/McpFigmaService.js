@@ -37,14 +37,14 @@ export class McpFigmaService {
     return { fileKey, nodeId };
   }
 
-  // Returns structured design text string ready to send to Claude, or null on failure
+  // Used by API mode (agentic loop) — returns raw text only
   async extract(url) {
     const parsed = this.parseUrl(url);
     if (!parsed) return null;
     try {
       const result = await this.client.callTool({
         name: "get_figma_data",
-        arguments: { fileKey: parsed.fileKey, nodeId: parsed.nodeId, depth: 2 },
+        arguments: { fileKey: parsed.fileKey, nodeId: parsed.nodeId },
       });
       return result.content[0]?.text ?? null;
     } catch (err) {
@@ -52,6 +52,7 @@ export class McpFigmaService {
       return null;
     }
   }
+
 }
 
 export async function createMcpFigmaService() {

@@ -5,7 +5,7 @@ export class BaseAgent {
     this.description = description;
     this.systemPrompt =
       "You generate UI components as plain HTML with Tailwind CSS classes. " +
-      "Return only the HTML snippet — no Vue, no scripts, no markdown fences, no backticks. " +
+      "Return ONLY the raw HTML snippet. No explanations, no markdown, no backticks, no commentary, no summaries. " +
       "Include realistic hardcoded demo data so the component looks complete visually. " +
       "If Figma design data is present in the prompt, use the exact values from it: " +
       "use inline style attributes for colors, gradients, fonts, border-radius, padding, and shadows " +
