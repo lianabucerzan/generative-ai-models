@@ -85,19 +85,18 @@ export class ClaudeAgent extends BaseAgent {
 
     const tools = [
       {
-        name: "get_figma_design",
+        name: "get_figma_data",
         description:
-          "Fetch design data from a Figma node — colors, fonts, dimensions, and a PNG screenshot. " +
-          "Call this when the user provides a Figma URL in their prompt.",
+          "Fetch comprehensive design data from a Figma node — colors, fonts, dimensions, and layout. " +
+          "ALWAYS call this when the user's prompt contains a Figma URL (figma.com). " +
+          "Do NOT call this if no Figma URL is present.",
         input_schema: {
           type: "object",
           properties: {
-            figma_url: {
-              type: "string",
-              description: "The full Figma URL including the node-id query parameter.",
-            },
+            fileKey: { type: "string", description: "The Figma file key from the URL." },
+            nodeId: { type: "string", description: "The node ID from the URL parameter node-id, formatted as '1234:5678'." },
           },
-          required: ["figma_url"],
+          required: ["fileKey", "nodeId"],
         },
       },
     ];
@@ -112,48 +111,58 @@ export class ClaudeAgent extends BaseAgent {
     const messages = [{ role: "user", content: userContent }];
 
     try {
-      const messagePayload = {
-        model: modelId,
-        max_tokens: 4096,
-        system: this.systemPrompt,
-        tools,
-        messages,
-      };
+      const figmaSvc = await getFigmaService();
+      let currentMessages = [...messages];
+      let finalMessage = null;
 
-      const msg1 = await this.client.messages.create(messagePayload);
-      let finalMessage = msg1;
-
-      if (msg1.stop_reason === "tool_use") {
-        const toolUse = msg1.content.find((b) => b.type === "tool_use");
-        const figmaSvc = await getFigmaService();
-        const figmaText = figmaSvc
-          ? await figmaSvc.extract(toolUse.input.figma_url)
-          : null;
-
-        const toolResultContent = figmaText
-          ? [{ type: "text", text: `Figma design data:\n${figmaText}\n\nGenerate an HTML component that faithfully replicates this design.` }]
-          : [{ type: "text", text: "Figma data unavailable — generate from prompt only." }];
-
-        finalMessage = await this.client.messages.create({
+      // Agentic loop — Claude calls tools until it's done
+      while (true) {
+        const response = await this.client.messages.create({
           model: modelId,
           max_tokens: 4096,
           system: this.systemPrompt,
-          tools,
-          messages: [
-            ...messages,
-            { role: "assistant", content: msg1.content },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "tool_result",
-                  tool_use_id: toolUse.id,
-                  content: toolResultContent,
-                },
-              ],
-            },
-          ],
+          tools: figmaSvc ? tools : [],
+          messages: currentMessages,
         });
+
+        if (response.stop_reason !== "tool_use") {
+          finalMessage = response;
+          break;
+        }
+
+        // Handle all tool calls in this response
+        const toolResults = [];
+        for (const block of response.content) {
+          if (block.type !== "tool_use") continue;
+
+          let resultText = "";
+
+          if (block.name === "get_figma_data" && figmaSvc) {
+            try {
+              const result = await figmaSvc.client.callTool({
+                name: "get_figma_data",
+                arguments: { fileKey: block.input.fileKey, nodeId: block.input.nodeId },
+              });
+              resultText = result.content[0]?.text ?? "No data returned.";
+            } catch (err) {
+              resultText = `Error fetching Figma data: ${err.message}`;
+            }
+          } else {
+            resultText = "Tool unavailable.";
+          }
+
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: [{ type: "text", text: resultText }],
+          });
+        }
+
+        currentMessages = [
+          ...currentMessages,
+          { role: "assistant", content: response.content },
+          { role: "user", content: toolResults },
+        ];
       }
 
       const latencyMs = Date.now() - start;
