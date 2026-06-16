@@ -208,7 +208,13 @@ const downloadToProject = async (modelId) => {
 };
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
-const buildPreviewDoc = (html) => `<!DOCTYPE html>
+const buildPreviewDoc = (output) => {
+  // Models sometimes return a Vue SFC instead of plain HTML — extract the template content
+  let html = output;
+  const templateMatch = output?.match(/<template>([\s\S]*?)<\/template>/);
+  if (templateMatch) html = templateMatch[1].trim();
+
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -217,6 +223,7 @@ const buildPreviewDoc = (html) => `<!DOCTYPE html>
 </head>
 <body class="p-4">${html}</body>
 </html>`;
+};
 
 const isNullish = (val) => val === null || val === undefined || (typeof val === "number" && isNaN(val));
 const fmt = (val) => (!isNullish(val) ? val : "—");
