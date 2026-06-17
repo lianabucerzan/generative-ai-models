@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const UI_COMPONENTS_DIR = resolve(__dirname, "../frontend/src/ui-components");
 
 
-dotenv.config({ override: true });
+dotenv.config({ path: resolve(__dirname, "../.env"), override: true });
 
 const app = express();
 const agentFactory = new AgentFactory();

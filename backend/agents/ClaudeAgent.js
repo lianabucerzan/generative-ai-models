@@ -101,10 +101,15 @@ export class ClaudeAgent extends BaseAgent {
       },
     ];
 
+    const textWithHint = image
+      ? (prompt || "Recreate this UI as plain HTML with Tailwind CSS classes.") +
+        "\n\nIMPORTANT: To reference the uploaded image anywhere in the HTML (src, background-image, etc.), use the exact placeholder string __UPLOADED_IMAGE__ — it will be replaced with the real image data URL at render time."
+      : prompt;
+
     const userContent = image
       ? [
           { type: "image", source: { type: "base64", media_type: image.mimeType, data: image.data } },
-          { type: "text", text: prompt || "Recreate this UI as plain HTML with Tailwind CSS classes." },
+          { type: "text", text: textWithHint },
         ]
       : prompt;
 

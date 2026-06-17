@@ -166,7 +166,7 @@ const generateComponent = async () => {
         payload.image = { data: imageData.value, mimeType: imageMimeType.value };
       }
       const res = await axios.post("http://localhost:3000/generate", payload);
-      results.value[model.id] = { output: res.data.output, metrics: res.data.metrics, prompt: prompt.value, loading: false, error: null };
+      results.value[model.id] = { output: res.data.output, metrics: res.data.metrics, prompt: prompt.value, imageDataUrl: imagePreview.value, loading: false, error: null };
     } catch (err) {
       results.value[model.id] = { output: null, metrics: null, loading: false, error: err.response?.data?.error || "Generation failed" };
     }
@@ -208,11 +208,11 @@ const downloadToProject = async (modelId) => {
 };
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
-const buildPreviewDoc = (output) => {
-  // Models sometimes return a Vue SFC instead of plain HTML — extract the template content
-  let html = output;
-  const templateMatch = output?.match(/<template>([\s\S]*?)<\/template>/);
+const buildPreviewDoc = (output, imageDataUrl = null) => {
+  let html = output ?? "";
+  const templateMatch = html.match(/<template>([\s\S]*?)<\/template>/);
   if (templateMatch) html = templateMatch[1].trim();
+  if (imageDataUrl) html = html.replaceAll("__UPLOADED_IMAGE__", imageDataUrl);
 
   return `<!DOCTYPE html>
 <html>
@@ -441,7 +441,7 @@ onMounted(async () => {
             <!-- allow-same-origin needed for Tailwind CDN in srcdoc; output is model-generated, not user-supplied -->
             <iframe
               v-else-if="results[model.id]?.output && getCardView(model.id) === 'preview'"
-              :srcdoc="buildPreviewDoc(results[model.id].output)"
+              :srcdoc="buildPreviewDoc(results[model.id].output, results[model.id].imageDataUrl)"
               sandbox="allow-scripts allow-same-origin"
               class="w-full border-0 h-full min-h-[300px]"
             />
@@ -529,7 +529,7 @@ onMounted(async () => {
         <!-- allow-same-origin needed for Tailwind CDN in srcdoc; output is model-generated, not user-supplied -->
         <iframe
           v-if="getCardView(expandedCard) === 'preview'"
-          :srcdoc="buildPreviewDoc(results[expandedCard]?.output)"
+          :srcdoc="buildPreviewDoc(results[expandedCard]?.output, results[expandedCard]?.imageDataUrl)"
           sandbox="allow-scripts allow-same-origin"
           class="w-full h-full border-0 bg-white"
         />
